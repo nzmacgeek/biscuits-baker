@@ -1,0 +1,55 @@
+# Baker configuration file
+# This file controls how Baker builds the Biscuits kernel and ClawOS system.
+
+# Target architecture (e.g. x86_64, aarch64, riscv64)
+arch: x86_64
+
+# Path to the kernel source tree (fetched/updated during prepare)
+kernel_source: src/biscuits
+
+# Sysroot path: everything gets installed here before packaging
+sysroot: sysroot
+
+# Output directory for packages and images
+output_dir: output
+
+# Temporary build directory
+build_dir: build
+
+# Sources directory (where repos are checked out)
+sources_dir: src
+
+# Logging level: debug, info, warning, error
+log_level: info
+
+# Kernel build options
+kernel:
+  config: kernel.config           # Path to kernel .config (relative to kernel_source)
+  make_flags: "-j4"               # Extra flags to pass to make
+  install_modules: true           # Whether to install kernel modules into sysroot
+
+# Network configuration used during prepare (fetching sources)
+network:
+  kernel_repo: "https://github.com/nzmacgeek/biscuits-kernel"
+  kernel_branch: "main"
+  extra_repos: []
+
+# Components to include in the build (order matters for display; deps are resolved automatically)
+components:
+  - name: musl
+    enabled: true
+  - name: linux-headers
+    enabled: true
+  - name: busybox
+    enabled: true
+
+# Components to explicitly exclude from the build
+exclude: []
+
+# Image output options
+image:
+  enabled: true
+  format: ext2          # ext2, ext4, iso9660
+  size_mb: 64
+  output: output/clawos.img
+  bootloader: none      # none, grub, syslinux
