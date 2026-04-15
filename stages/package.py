@@ -2,10 +2,13 @@
 stages/package.py - Package stage for Baker.
 
 Creates a discrete distributable archive for each successfully built
-component.
+component and copies the finished packages to the ``core/`` directory.
 """
 
 from __future__ import annotations
+
+import os
+import shutil
 
 from stage_runner import Stage
 from helpers.packaging import PackageBuilder
@@ -49,8 +52,32 @@ class PackageStage(Stage):
             except Exception as exc:  # noqa: BLE001
                 self.log.error("Packaging failed for %s: %s", name, exc)
 
+        # Copy finished packages to the core/ directory
+        if packages:
+            self._copy_to_core(packages)
+
         self.log.info(
             "Package stage complete.  %d package(s) created.", len(packages)
         )
         for pkg in packages:
             self.log.info("  %s", pkg)
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+
+    def _copy_to_core(self, packages: list) -> None:
+        """Copy all built packages to the core packages directory."""
+        core_dir = self.config.abs_core_packages_dir
+        os.makedirs(core_dir, exist_ok=True)
+
+        for pkg_path in packages:
+            if not os.path.isfile(pkg_path):
+                continue
+            dest = os.path.join(core_dir, os.path.basename(pkg_path))
+            shutil.copy2(pkg_path, dest)
+            self.log.info("Copied to core: %s", dest)
+
+        self.log.info(
+            "Built packages available in: %s", core_dir
+        )

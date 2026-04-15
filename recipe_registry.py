@@ -10,18 +10,24 @@ from typing import Dict, List, Type
 
 from config import Config
 from recipes.base import BaseRecipe
-from recipes.musl import MuslRecipe
-from recipes.linux_headers import LinuxHeadersRecipe
-from recipes.busybox import BusyBoxRecipe
+from recipes.musl_blueyos import MuslBlueyosRecipe
+from recipes.dimsim import DimsimRecipe
+from recipes.claw import ClawRecipe
+from recipes.matey import MateyRecipe
+from recipes.blueyos_bash import BlueyosBashRecipe
+from recipes.blueyos_tzinfo import BlueyosTzinfoRecipe
 
 # ---------------------------------------------------------------------------
 # All known recipe classes
 # ---------------------------------------------------------------------------
 
 RECIPE_CLASSES: List[Type[BaseRecipe]] = [
-    MuslRecipe,
-    LinuxHeadersRecipe,
-    BusyBoxRecipe,
+    MuslBlueyosRecipe,
+    DimsimRecipe,
+    ClawRecipe,
+    MateyRecipe,
+    BlueyosBashRecipe,
+    BlueyosTzinfoRecipe,
 ]
 
 

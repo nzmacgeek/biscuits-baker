@@ -34,6 +34,7 @@ from config import load_config
 from stage_runner import StageRunner
 from stages.prepare import PrepareStage
 from stages.kernel import KernelStage
+from stages.toolchain import ToolchainStage
 from stages.build import BuildStage
 from stages.package import PackageStage
 from stages.image import ImageStage
@@ -100,6 +101,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Configure and build the Biscuits kernel",
     )
 
+    # toolchain
+    sub_toolchain = subparsers.add_parser(
+        "toolchain",
+        help="Build cross-compiler toolchain and musl-blueyos C library",
+    )
+
     # build
     sub_build = subparsers.add_parser(
         "build",
@@ -121,7 +128,19 @@ def build_parser() -> argparse.ArgumentParser:
     # all
     sub_all = subparsers.add_parser(
         "all",
-        help="Run the full pipeline: prepare → kernel → build → package → image",
+        help="Run the full pipeline: prepare → kernel → toolchain → build → package → image",
+    )
+
+    # passwd
+    sub_passwd = subparsers.add_parser(
+        "passwd",
+        help="Set the root password inside the sysroot",
+    )
+    sub_passwd.add_argument(
+        "password",
+        nargs="?",
+        default=None,
+        help="New root password (prompted interactively if omitted)",
     )
 
     # clean
@@ -156,18 +175,49 @@ def build_parser() -> argparse.ArgumentParser:
 # ---------------------------------------------------------------------------
 
 # Ordered list of stages for the 'all' command
-ALL_STAGES = ["prepare", "kernel", "build", "package", "image"]
+ALL_STAGES = ["prepare", "kernel", "toolchain", "build", "package", "image"]
 
 
 def _register_all_stages(runner: StageRunner) -> None:
     runner.register_many(
         PrepareStage,
         KernelStage,
+        ToolchainStage,
         BuildStage,
         PackageStage,
         ImageStage,
         CleanStage,
     )
+
+
+def _run_passwd(cfg, args) -> int:
+    """Set the root password inside the sysroot."""
+    import getpass
+    from helpers.password import set_root_password
+
+    password = getattr(args, "password", None)
+    if not password:
+        try:
+            password = getpass.getpass(f"New root password for sysroot ({cfg.abs_sysroot}): ")
+            confirm = getpass.getpass("Confirm password: ")
+        except (KeyboardInterrupt, EOFError):
+            print("\nCancelled.", file=sys.stderr)
+            return 1
+        if password != confirm:
+            print("Passwords do not match.", file=sys.stderr)
+            return 1
+    if not password:
+        print("Password cannot be empty.", file=sys.stderr)
+        return 1
+
+    logger = logging.getLogger("baker.passwd")
+    try:
+        set_root_password(cfg.abs_sysroot, password)
+        logger.info("Root password set successfully in %s", cfg.abs_sysroot)
+        return 0
+    except Exception as exc:  # noqa: BLE001
+        logger.error("Failed to set root password: %s", exc)
+        return 1
 
 
 # ---------------------------------------------------------------------------
@@ -202,6 +252,9 @@ def main(argv: list = None) -> int:
     elif command == "kernel":
         results = runner.run_stages(["kernel"])
 
+    elif command == "toolchain":
+        results = runner.run_stages(["toolchain"])
+
     elif command == "build":
         results = runner.run_stages(["build"])
 
@@ -213,6 +266,9 @@ def main(argv: list = None) -> int:
 
     elif command == "all":
         results = runner.run_stages(ALL_STAGES)
+
+    elif command == "passwd":
+        return _run_passwd(cfg, args)
 
     elif command == "clean":
         # Patch CleanStage flags based on CLI args

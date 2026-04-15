@@ -27,6 +27,10 @@ class TestCLIParsing:
         args = self._parse(["kernel"])
         assert args.command == "kernel"
 
+    def test_toolchain_command(self):
+        args = self._parse(["toolchain"])
+        assert args.command == "toolchain"
+
     def test_build_command(self):
         args = self._parse(["build"])
         assert args.command == "build"
@@ -42,6 +46,16 @@ class TestCLIParsing:
     def test_all_command(self):
         args = self._parse(["all"])
         assert args.command == "all"
+
+    def test_passwd_command_with_arg(self):
+        args = self._parse(["passwd", "secret"])
+        assert args.command == "passwd"
+        assert args.password == "secret"
+
+    def test_passwd_command_no_arg(self):
+        args = self._parse(["passwd"])
+        assert args.command == "passwd"
+        assert args.password is None
 
     def test_clean_command(self):
         args = self._parse(["clean"])

@@ -24,7 +24,7 @@ class TestLoadConfigDefaults:
 
     def test_default_arch(self, tmp_path):
         cfg = load_config(str(tmp_path / "no.yaml"))
-        assert cfg.arch == "x86_64"
+        assert cfg.arch == "i386"
 
     def test_default_log_level(self, tmp_path):
         cfg = load_config(str(tmp_path / "no.yaml"))
