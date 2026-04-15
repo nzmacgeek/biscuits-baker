@@ -49,7 +49,6 @@ class MuslPackageRecipe(BaseRecipe):
         env = {"MUSL_PREFIX": musl_prefix}
         make_flags = self.config.kernel.make_flags.split()
         self.run(["make"] + make_flags, cwd=src, env=env)
-
     def install(self) -> None:
         src = self._source_dir
         build_out = os.path.join(src, "build", self.binary_name or self.name)
