@@ -1,28 +1,65 @@
-# Baker build artifacts
+# ---------------------------------------------------------------------------
+# Baker / BlueyOS generated artifacts
+# ---------------------------------------------------------------------------
 build/
 sysroot/
 output/
+core/
+
+# Local source checkouts populated by `baker prepare`
 src/
 
-# Python
+# ---------------------------------------------------------------------------
+# Python bytecode / packaging
+# ---------------------------------------------------------------------------
 __pycache__/
 *.py[cod]
 *.pyo
 *.pyd
+*.so
+
 .Python
 *.egg
 *.egg-info/
-dist/
 .eggs/
+dist/
 pip-wheel-metadata/
 
-# Testing
+# ---------------------------------------------------------------------------
+# Local Python virtual environments (this repo currently uses one at root)
+# ---------------------------------------------------------------------------
+/bin
+/bin/
+/include
+/include/
+/lib
+/lib/
+/lib64
+/lib64/
+/pyvenv.cfg
+.venv/
+venv/
+env/
+ENV/
+
+# ---------------------------------------------------------------------------
+# Test / coverage / type checker caches
+# ---------------------------------------------------------------------------
 .pytest_cache/
 .coverage
+.coverage.*
 htmlcov/
+.mypy_cache/
+.ruff_cache/
+.pyre/
+.hypothesis/
 
-# Editor
-.vscode/
+# ---------------------------------------------------------------------------
+# Editors / OS noise
+# ---------------------------------------------------------------------------
 .idea/
+.vscode/
 *.swp
+*.swo
 *~
+.DS_Store

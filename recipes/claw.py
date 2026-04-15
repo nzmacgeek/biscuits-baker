@@ -31,6 +31,8 @@ class ClawRecipe(MuslPackageRecipe):
             raise RecipeError(f"claw source not found at {src}")
 
         musl_prefix = self.config.abs_musl_prefix
+        toolchain_prefix = self.config.toolchain_prefix
+        cross_cc = os.path.join(toolchain_prefix, "bin", "i386-blueyos-elf-gcc")
 
         # Run autogen.sh if configure script doesn't exist yet
         configure_script = os.path.join(src, "configure")
@@ -46,16 +48,73 @@ class ClawRecipe(MuslPackageRecipe):
             raise RecipeError(f"configure script not found in {src}")
 
         self.log.info("Configuring claw with musl prefix %s", musl_prefix)
+        env = {
+            "BLUEYOS_CROSS": toolchain_prefix,
+            "BLUEYOS_SYSROOT": musl_prefix,
+        }
+        if os.path.isfile(cross_cc):
+            env["CC"] = cross_cc
+            self.log.info("Using cross compiler for claw: %s", cross_cc)
+        else:
+            self.log.warning(
+                "Cross compiler not found at %s; configure may fall back to host compiler.",
+                cross_cc,
+            )
+
+        configure_wrapper = os.path.join(src, "configure-blueyos")
+        if os.path.isfile(configure_wrapper):
+            self.run(
+                [
+                    "./configure-blueyos",
+                    "--prefix=/",
+                    "--sbindir=/sbin",
+                    "--bindir=/bin",
+                    "--sysconfdir=/etc",
+                    "--localstatedir=/var",
+                ],
+                cwd=src,
+                env=env,
+            )
+            return
+
         self.run(
             [
                 "./configure",
-                f"--prefix=/usr",
-                f"CC=gcc -m32 -isystem {musl_prefix}/include",
-                f"LDFLAGS=-L{musl_prefix}/lib -static",
-                "--host=i686-linux-gnu",
+                "--host=i386-blueyos-elf",
+                "--enable-static-binary",
+                f"--with-sysroot={musl_prefix}",
+                "--prefix=/",
+                "--sbindir=/sbin",
+                "--bindir=/bin",
+                "--sysconfdir=/etc",
+                "--localstatedir=/var",
             ],
             cwd=src,
+            env=env,
         )
+
+    def build(self) -> None:
+        src = self._source_dir
+        if not os.path.isdir(src):
+            raise RecipeError(
+                f"{self.name} source not found at {src}.  Run 'baker prepare' first."
+            )
+
+        make_flags = self.config.kernel.make_flags.split()
+        musl_prefix = self.config.abs_musl_prefix
+        toolchain_prefix = self.config.toolchain_prefix
+        cross_cc = os.path.join(toolchain_prefix, "bin", "i386-blueyos-elf-gcc")
+
+        env = {
+            "MUSL_PREFIX": musl_prefix,
+            "BLUEYOS_CROSS": toolchain_prefix,
+            "BLUEYOS_SYSROOT": musl_prefix,
+        }
+        if os.path.isfile(cross_cc):
+            env["CC"] = cross_cc
+
+        self.log.info("Building %s against musl sysroot at %s", self.name, musl_prefix)
+        self.run(["make"] + make_flags, cwd=src, env=env)
 
     def install(self) -> None:
         src = self._source_dir

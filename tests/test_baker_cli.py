@@ -35,6 +35,17 @@ class TestCLIParsing:
         args = self._parse(["build"])
         assert args.command == "build"
 
+    def test_build_component_flag(self):
+        args = self._parse(["build", "--component", "matey"])
+        assert args.command == "build"
+        assert args.build_component == "matey"
+
+    def test_build_with_deps_flag(self):
+        args = self._parse(["build", "--component", "matey", "--with-deps"])
+        assert args.command == "build"
+        assert args.build_component == "matey"
+        assert args.build_with_deps is True
+
     def test_package_command(self):
         args = self._parse(["package"])
         assert args.command == "package"

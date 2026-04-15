@@ -31,6 +31,21 @@ class MuslPackageRecipe(BaseRecipe):
         super().__init__(config)
         self._source_dir = os.path.join(config.abs_sources_dir, self.name)
 
+    def _resolve_musl_make_prefix(self) -> str:
+        """Return MUSL_PREFIX path with include/lib expected by package Makefiles.
+
+        Some environments provide a sysroot layout (<prefix>/usr/include, <prefix>/usr/lib),
+        while others provide a direct musl prefix (<prefix>/include, <prefix>/lib).
+        """
+        base = self.config.abs_musl_prefix
+        candidates = [base, os.path.join(base, "usr")]
+        for candidate in candidates:
+            include_dir = os.path.join(candidate, "include")
+            libc_a = os.path.join(candidate, "lib", "libc.a")
+            if os.path.isdir(include_dir) and os.path.isfile(libc_a):
+                return candidate
+        return base
+
     # ------------------------------------------------------------------
     # Template method implementations
     # ------------------------------------------------------------------
@@ -42,7 +57,7 @@ class MuslPackageRecipe(BaseRecipe):
                 f"{self.name} source not found at {src}.  Run 'baker prepare' first."
             )
 
-        musl_prefix = self.config.abs_musl_prefix
+        musl_prefix = self._resolve_musl_make_prefix()
         self.log.info(
             "Building %s against musl at %s", self.name, musl_prefix
         )
@@ -69,7 +84,7 @@ class MuslPackageRecipe(BaseRecipe):
     def package(self) -> str | None:
         """Try ``make package`` (dpkbuild) first; fall back to tar.gz."""
         src = self._source_dir
-        musl_prefix = self.config.abs_musl_prefix
+        musl_prefix = self._resolve_musl_make_prefix()
 
         dpkbuild_in_src = os.path.join(
             self.config.abs_sources_dir, "dimsim", "bin", "dpkbuild"

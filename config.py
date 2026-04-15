@@ -154,6 +154,20 @@ def _deep_merge(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any
     return result
 
 
+def _has_musl_layout(prefix: str) -> bool:
+    """Return True when *prefix* looks like a usable musl install root.
+
+    Supported layouts:
+    - <prefix>/include and <prefix>/lib/libc.a
+    - <prefix>/usr/include and <prefix>/usr/lib/libc.a
+    """
+    direct_include = os.path.isdir(os.path.join(prefix, "include"))
+    direct_libc = os.path.isfile(os.path.join(prefix, "lib", "libc.a"))
+    usr_include = os.path.isdir(os.path.join(prefix, "usr", "include"))
+    usr_libc = os.path.isfile(os.path.join(prefix, "usr", "lib", "libc.a"))
+    return (direct_include and direct_libc) or (usr_include and usr_libc)
+
+
 def load_config(path: str = "baker.yaml") -> Config:
     """Load baker.yaml from *path* and return a validated :class:`Config`."""
     raw: Dict[str, Any] = {}
@@ -248,16 +262,25 @@ def load_config(path: str = "baker.yaml") -> Config:
     cfg.abs_kernel_source = os.path.join(base_dir, cfg.kernel_source)
     cfg.abs_core_packages_dir = os.path.join(base_dir, cfg.core_packages_dir)
 
-    # Resolve musl prefix: explicit config → /opt/blueyos-sysroot → build/musl
+    # Resolve musl prefix: explicit config → valid /opt/blueyos-sysroot → build/musl
     if cfg.musl_prefix:
         # Resolve relative to config file directory, same as all other paths
         if os.path.isabs(cfg.musl_prefix):
             cfg.abs_musl_prefix = cfg.musl_prefix
         else:
             cfg.abs_musl_prefix = os.path.normpath(os.path.join(base_dir, cfg.musl_prefix))
-    elif os.path.isdir("/opt/blueyos-sysroot"):
-        cfg.abs_musl_prefix = "/opt/blueyos-sysroot"
     else:
-        cfg.abs_musl_prefix = os.path.join(cfg.abs_build_dir, "musl")
+        opt_sysroot = "/opt/blueyos-sysroot"
+        if _has_musl_layout(opt_sysroot):
+            cfg.abs_musl_prefix = opt_sysroot
+        else:
+            cfg.abs_musl_prefix = os.path.join(cfg.abs_build_dir, "musl")
+            if os.path.isdir(opt_sysroot):
+                logger.warning(
+                    "Ignoring %s for musl_prefix: expected include/libc.a layout not found; "
+                    "falling back to %s",
+                    opt_sysroot,
+                    cfg.abs_musl_prefix,
+                )
 
     return cfg

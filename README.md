@@ -159,6 +159,21 @@ Build all enabled components in dependency order against musl-blueyos.
 baker build
 ```
 
+Rebuild a single component repeatedly (fast edit/build loop):
+
+```bash
+baker build --component matey
+```
+
+When `--component` is used, Baker always checks that the component repo's
+local `main` is up to date with `origin/main` first (fetch + fast-forward pull).
+
+If you also want to rebuild that component's dependencies:
+
+```bash
+baker build --component matey --with-deps
+```
+
 Each recipe runs `configure → build → install` into the sysroot. The musl sysroot is
 passed via the `MUSL_PREFIX` environment variable so each package's Makefile picks it up
 automatically.

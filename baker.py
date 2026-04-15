@@ -8,7 +8,7 @@ Usage:
 Commands:
     prepare   Fetch/update source repositories
     kernel    Build the Biscuits kernel
-    build     Build all enabled components
+    build     Build all enabled components (or one component)
     package   Package built components into distributable archives
     image     Assemble a bootable filesystem image
     all       Run prepare → kernel → build → package → image in order
@@ -111,6 +111,19 @@ def build_parser() -> argparse.ArgumentParser:
     sub_build = subparsers.add_parser(
         "build",
         help="Build all enabled components in dependency order",
+    )
+    sub_build.add_argument(
+        "--component", "-c",
+        dest="build_component",
+        metavar="NAME",
+        default=None,
+        help="Build only one enabled component by name",
+    )
+    sub_build.add_argument(
+        "--with-deps",
+        action="store_true",
+        dest="build_with_deps",
+        help="When used with --component, also rebuild that component's dependencies",
     )
 
     # package
@@ -256,6 +269,9 @@ def main(argv: list = None) -> int:
         results = runner.run_stages(["toolchain"])
 
     elif command == "build":
+        BuildStage.target_component = getattr(args, "build_component", None)
+        BuildStage.include_dependencies = bool(getattr(args, "build_with_deps", False))
+        BuildStage.check_main_updates = BuildStage.target_component is not None
         results = runner.run_stages(["build"])
 
     elif command == "package":
