@@ -1,0 +1,88 @@
+# Baker configuration file
+# This file controls how Baker builds the Biscuits kernel and BlueyOS system.
+
+# Target architecture — biscuits defaults to i386
+arch: i386
+
+# Path to the kernel source tree (fetched/updated during prepare)
+kernel_source: src/biscuits
+
+# Sysroot path: everything gets installed here before packaging
+sysroot: sysroot
+
+# Output directory for packages and images
+output_dir: output
+
+# Temporary build directory
+build_dir: build
+
+# Sources directory (where repos are checked out)
+sources_dir: src
+
+# Directory to copy finished .dpk packages into (so you can inspect what was built)
+core_packages_dir: core
+
+# Path to an installed musl-blueyos sysroot used to build userland components.
+# Leave empty to auto-detect (/opt/blueyos-sysroot if present, else build/musl).
+musl_prefix: ""
+
+# Path where the cross-compiler toolchain will be installed
+toolchain_prefix: /opt/blueyos-cross
+
+# Logging level: debug, info, warning, error
+log_level: info
+
+# Kernel build options
+kernel:
+  config: ""              # Path to kernel .config (relative to kernel_source). Empty = use upstream default.
+  make_flags: "-j4"       # Extra flags to pass to make
+  install_modules: false  # biscuits does not use Linux-style modules
+
+# Network configuration used during prepare (fetching sources)
+network:
+  kernel_repo: "https://github.com/nzmacgeek/biscuits"
+  kernel_branch: "main"
+  musl_blueyos_repo: "https://github.com/nzmacgeek/musl-blueyos"
+  musl_blueyos_branch: "main"
+  dimsim_repo: "https://github.com/nzmacgeek/dimsim"
+  dimsim_branch: "main"
+  package_repos:
+    - name: claw
+      url: "https://github.com/nzmacgeek/claw"
+      branch: "main"
+    - name: matey
+      url: "https://github.com/nzmacgeek/matey"
+      branch: "main"
+    - name: blueyos-bash
+      url: "https://github.com/nzmacgeek/blueyos-bash"
+      branch: "main"
+    - name: blueyos-tzinfo
+      url: "https://github.com/nzmacgeek/blueyos-tzinfo"
+      branch: "main"
+  extra_repos: []
+
+# Components to include in the build (order matters for display; deps are resolved automatically)
+components:
+  - name: musl-blueyos
+    enabled: true
+  - name: dimsim
+    enabled: true
+  - name: claw
+    enabled: true
+  - name: matey
+    enabled: true
+  - name: blueyos-bash
+    enabled: true
+  - name: blueyos-tzinfo
+    enabled: true
+
+# Components to explicitly exclude from the build
+exclude: []
+
+# Image output options
+image:
+  enabled: true
+  format: iso       # biscuits natively produces a GRUB-bootable ISO via make iso
+  size_mb: 64
+  output: output/blueyos.iso
+  bootloader: grub
