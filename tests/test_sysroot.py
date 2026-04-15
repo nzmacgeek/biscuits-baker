@@ -95,3 +95,37 @@ class TestSysrootInstaller:
 
         files = installer.list_installed_files()
         assert any("passwd" in f for f in files)
+
+    def test_install_tree_root_guard_merges_not_wipes(self, tmp_path):
+        """install_tree with dest_rel='.' must not delete the sysroot root."""
+        sysroot = tmp_path / "sysroot"
+        sysroot.mkdir()
+        sentinel = sysroot / "sentinel.txt"
+        sentinel.write_text("keep me")
+
+        payload = tmp_path / "payload"
+        tz_dir = payload / "usr" / "share" / "zoneinfo"
+        tz_dir.mkdir(parents=True)
+        (tz_dir / "UTC").write_text("tz data")
+
+        installer = SysrootInstaller(str(sysroot))
+        installer.install_tree(str(payload), ".")
+
+        assert sentinel.is_file(), "install_tree wiped the sysroot root"
+        assert (sysroot / "usr" / "share" / "zoneinfo" / "UTC").is_file()
+
+    def test_install_tree_empty_dest_rel_merges(self, tmp_path):
+        """install_tree with dest_rel='' behaves same as '.'."""
+        sysroot = tmp_path / "sysroot"
+        sysroot.mkdir()
+        (sysroot / "existing.txt").write_text("existing")
+
+        payload = tmp_path / "payload"
+        payload.mkdir()
+        (payload / "new.txt").write_text("new")
+
+        installer = SysrootInstaller(str(sysroot))
+        installer.install_tree(str(payload), "")
+
+        assert (sysroot / "existing.txt").is_file()
+        assert (sysroot / "new.txt").is_file()

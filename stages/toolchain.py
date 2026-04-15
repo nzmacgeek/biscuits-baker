@@ -5,11 +5,15 @@ This stage:
 1. Runs ``tools/make-libc-toolchain.sh`` from the biscuits repo to build the
    i686-elf cross-compiler and install it to ``toolchain_prefix``
    (default: /opt/blueyos-cross).
-2. Runs ``tools/build-musl.sh`` from the biscuits repo to clone musl-blueyos
-   (into ``<kernel_source>/musl-blueyos``) and build/install it to:
-   - ``build/musl``           (repo-local, used by recipe builds)
-   - ``/opt/blueyos-sysroot`` (runtime sysroot, used by ``make disk``)
-   - ``/opt/blueyos-cross/musl`` (alongside the cross toolchain)
+2. Runs ``tools/build-musl.sh`` from the biscuits repo to build/install
+   musl-blueyos to:
+   - ``build/musl``          — repo-local prefix (always writeable)
+   - ``musl_prefix``         — authoritative musl install (from config)
+   - ``toolchain_prefix/musl`` — alongside the cross toolchain
+
+Install destinations for the sysroot and cross-musl are derived from
+``cfg.toolchain_prefix`` and ``cfg.abs_musl_prefix``; no paths are
+hard-coded.  Destinations that are not writeable are silently skipped.
 
 Both scripts are idempotent: re-running the stage after a successful build
 is fast because they skip already-installed artefacts.
@@ -85,13 +89,18 @@ class ToolchainStage(Stage):
         local_prefix = os.path.join(cfg.abs_build_dir, "musl")
         os.makedirs(local_prefix, exist_ok=True)
 
+        # Authoritative musl destination comes from config.  When it equals the
+        # local build prefix (the default fallback) we also try to install to
+        # the cross-toolchain sysroot path alongside the toolchain.
+        musl_sysroot_dest = cfg.abs_musl_prefix
+        cross_musl_dest = os.path.join(cfg.toolchain_prefix, "musl")
+
         self.log.info("Building musl-blueyos via %s", musl_script)
         self.log.info("  local prefix  : %s", local_prefix)
-        self.log.info("  sysroot dest  : /opt/blueyos-sysroot")
-        self.log.info("  cross prefix  : /opt/blueyos-cross/musl")
+        self.log.info("  sysroot dest  : %s", musl_sysroot_dest)
+        self.log.info("  cross prefix  : %s", cross_musl_dest)
 
-        # Build args: only install to local prefix unless running as root
-        # (sysroot and cross-prefix installs to /opt/... require elevated perms)
+        # Build args: always install to local prefix; conditionally to sysroot and cross
         build_args = [
             "bash",
             musl_script,
@@ -102,20 +111,22 @@ class ToolchainStage(Stage):
         ]
 
         # Attempt sysroot + cross installs; skip gracefully if not writable
-        if self._is_writable_or_creatable("/opt/blueyos-sysroot"):
-            build_args += ["--sysroot=/opt/blueyos-sysroot"]
+        if self._is_writable_or_creatable(musl_sysroot_dest):
+            build_args += [f"--sysroot={musl_sysroot_dest}"]
         else:
             self.log.info(
-                "  /opt/blueyos-sysroot not writable; skipping sysroot install "
-                "(use sudo or set musl_prefix in baker.yaml)."
+                "  %s not writable; skipping sysroot install "
+                "(use sudo or set musl_prefix in baker.yaml).",
+                musl_sysroot_dest,
             )
             build_args.append("--skip-sysroot")
 
-        if self._is_writable_or_creatable("/opt/blueyos-cross/musl"):
-            pass  # default: install
+        if self._is_writable_or_creatable(cross_musl_dest):
+            build_args += [f"--cross-prefix={cross_musl_dest}"]
         else:
             self.log.info(
-                "  /opt/blueyos-cross/musl not writable; skipping cross install."
+                "  %s not writable; skipping cross install.",
+                cross_musl_dest,
             )
             build_args.append("--skip-cross")
 

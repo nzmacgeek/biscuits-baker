@@ -89,10 +89,15 @@ def _generate_hash(password: str) -> str:
 
 
 def _openssl_hash(password: str) -> str:
-    """Generate a SHA-512 crypt hash using the host ``openssl`` binary."""
+    """Generate a SHA-512 crypt hash using the host ``openssl`` binary.
+
+    The password is passed via stdin rather than as a command-line argument
+    to avoid leaking it through the process list (``ps``/``/proc``).
+    """
     salt = _random_salt(16)
     result = subprocess.run(
-        ["openssl", "passwd", "-6", "-salt", salt, password],
+        ["openssl", "passwd", "-6", "-salt", salt, "-stdin"],
+        input=password,
         capture_output=True,
         text=True,
     )
@@ -132,6 +137,7 @@ def _update_shadow(sysroot: str, pw_hash: str) -> None:
         if not updated:
             lines.insert(0, new_root_line)
         _write_lines(shadow_path, lines)
+        os.chmod(shadow_path, 0o600)
         logger.debug("Updated root entry in %s", shadow_path)
     else:
         _write_lines(shadow_path, [new_root_line])
@@ -178,5 +184,13 @@ def _read_lines(path: str) -> list:
 
 
 def _write_lines(path: str, lines: list) -> None:
-    with open(path, "w") as fh:
-        fh.writelines(lines)
+    # Write with O_CREAT | O_WRONLY | O_TRUNC and mode 0o600 for shadow files,
+    # then fchmod to ensure correct mode even if an existing file's mode was wider.
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        with os.fdopen(fd, "w") as fh:
+            fh.writelines(lines)
+    except Exception:
+        # fd is already owned by fdopen — do not double-close
+        raise
+    os.chmod(path, 0o600)

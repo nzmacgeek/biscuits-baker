@@ -52,6 +52,8 @@ class BuildStage(Stage):
             self.log.info("-" * 50)
 
             try:
+                self.log.info("[%s] fetch", name)
+                recipe.fetch()
                 self.log.info("[%s] configure", name)
                 recipe.configure()
                 self.log.info("[%s] build", name)

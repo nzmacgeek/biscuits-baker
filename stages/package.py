@@ -11,7 +11,6 @@ import os
 import shutil
 
 from stage_runner import Stage
-from helpers.packaging import PackageBuilder
 
 
 class PackageStage(Stage):
@@ -34,7 +33,6 @@ class PackageStage(Stage):
             self.log.warning("No components to package.")
             return
 
-        builder = PackageBuilder(cfg.abs_output_dir)
         packages = []
 
         for name in enabled_names:

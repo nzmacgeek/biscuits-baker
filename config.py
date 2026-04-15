@@ -250,7 +250,11 @@ def load_config(path: str = "baker.yaml") -> Config:
 
     # Resolve musl prefix: explicit config → /opt/blueyos-sysroot → build/musl
     if cfg.musl_prefix:
-        cfg.abs_musl_prefix = os.path.abspath(cfg.musl_prefix)
+        # Resolve relative to config file directory, same as all other paths
+        if os.path.isabs(cfg.musl_prefix):
+            cfg.abs_musl_prefix = cfg.musl_prefix
+        else:
+            cfg.abs_musl_prefix = os.path.normpath(os.path.join(base_dir, cfg.musl_prefix))
     elif os.path.isdir("/opt/blueyos-sysroot"):
         cfg.abs_musl_prefix = "/opt/blueyos-sysroot"
     else:

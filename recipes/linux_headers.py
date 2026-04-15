@@ -10,7 +10,7 @@ from __future__ import annotations
 import os
 
 from config import Config
-from recipes.base import BaseRecipe
+from recipes.base import BaseRecipe, safe_extract
 
 
 class LinuxHeadersRecipe(BaseRecipe):
@@ -36,10 +36,8 @@ class LinuxHeadersRecipe(BaseRecipe):
 
         extracted = os.path.join(src, f"linux-{self.version}")
         if not os.path.exists(extracted):
-            import tarfile
             self.log.info("Extracting %s", tarball)
-            with tarfile.open(tarball) as tf:
-                tf.extractall(src)
+            safe_extract(tarball, src)
 
     def build(self) -> None:
         """Headers don't require a compilation step."""

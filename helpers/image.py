@@ -46,7 +46,7 @@ class ImageBuilder:
 
         if fmt in ("ext2", "ext4"):
             return self._build_ext_image(fmt)
-        elif fmt == "iso9660":
+        elif fmt in ("iso", "iso9660"):
             return self._build_iso_image()
         elif fmt == "tar":
             return self._build_tar_image()

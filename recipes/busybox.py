@@ -11,7 +11,7 @@ import os
 import shutil
 
 from config import Config
-from recipes.base import BaseRecipe
+from recipes.base import BaseRecipe, safe_extract
 
 
 class BusyBoxRecipe(BaseRecipe):
@@ -43,10 +43,8 @@ class BusyBoxRecipe(BaseRecipe):
 
         extracted = os.path.join(src, f"busybox-{self.version}")
         if not os.path.exists(extracted):
-            import tarfile
             self.log.info("Extracting %s", tarball)
-            with tarfile.open(tarball) as tf:
-                tf.extractall(src)
+            safe_extract(tarball, src)
 
     def configure(self) -> None:
         self.log.info("Configuring BusyBox (defconfig)")
@@ -66,12 +64,9 @@ class BusyBoxRecipe(BaseRecipe):
         if not os.path.exists(bdir):
             self.log.warning("BusyBox build dir not found; skipping.")
             return
+        make_flags = self.config.kernel.make_flags.split()
         self.run(
-            [
-                "make",
-                self.config.kernel.make_flags,
-                f"ARCH={self.config.arch}",
-            ],
+            ["make"] + make_flags + [f"ARCH={self.config.arch}"],
             cwd=bdir,
         )
 

@@ -10,7 +10,6 @@ from __future__ import annotations
 import logging
 import os
 import shutil
-import stat
 from typing import List, Optional
 
 logger = logging.getLogger(__name__)
@@ -80,10 +79,34 @@ class SysrootInstaller:
     def install_tree(self, src_dir: str, dest_rel: str, symlinks: bool = True) -> str:
         """Recursively copy *src_dir* into *dest_rel* inside the sysroot.
 
+        If *dest_rel* is ``'.'``, ``''``, or otherwise resolves to the sysroot
+        root, the *contents* of *src_dir* are merged into the sysroot rather
+        than replacing it entirely.  This prevents accidentally deleting the
+        whole sysroot when installing a payload whose top-level directory maps
+        to ``/``.
+
         Returns:
             Absolute destination path.
         """
-        dest = os.path.join(self.sysroot, dest_rel.lstrip(os.sep))
+        dest = os.path.normpath(os.path.join(self.sysroot, dest_rel.lstrip(os.sep)))
+
+        # Guard: if dest resolves to the sysroot root itself, merge contents
+        # instead of rmtree + copytree (which would wipe the sysroot).
+        if os.path.normpath(dest) == os.path.normpath(self.sysroot):
+            for item in os.listdir(src_dir):
+                s = os.path.join(src_dir, item)
+                d = os.path.join(self.sysroot, item)
+                if os.path.isdir(s) and not os.path.islink(s):
+                    if os.path.isdir(d):
+                        shutil.rmtree(d)
+                    elif os.path.exists(d):
+                        os.remove(d)
+                    shutil.copytree(s, d, symlinks=symlinks)
+                else:
+                    shutil.copy2(s, d)
+            logger.debug("merged tree %s → %s (sysroot root)", src_dir, self.sysroot)
+            return self.sysroot
+
         if os.path.exists(dest):
             shutil.rmtree(dest)
         shutil.copytree(src_dir, dest, symlinks=symlinks)

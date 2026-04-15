@@ -11,7 +11,7 @@ import os
 import shutil
 
 from config import Config
-from recipes.base import BaseRecipe
+from recipes.base import BaseRecipe, safe_extract
 
 
 class MuslRecipe(BaseRecipe):
@@ -45,10 +45,8 @@ class MuslRecipe(BaseRecipe):
         # Extract if not already done
         extracted = os.path.join(src, f"musl-{self.version}")
         if not os.path.exists(extracted):
-            import tarfile
             self.log.info("Extracting %s", tarball)
-            with tarfile.open(tarball) as tf:
-                tf.extractall(src)
+            safe_extract(tarball, src)
 
     def configure(self) -> None:
         self.log.info("Configuring musl")
@@ -61,12 +59,12 @@ class MuslRecipe(BaseRecipe):
         self.run(
             [
                 os.path.join(src_inner, "configure"),
-                f"--prefix=/usr",
-                f"--syslibdir=/lib",
-                f"--disable-static",
-                f"ARCH={self.config.arch}",
+                "--prefix=/usr",
+                "--syslibdir=/lib",
+                "--disable-static",
             ],
             cwd=bdir,
+            env={"ARCH": self.config.arch},
         )
 
     def build(self) -> None:
@@ -75,7 +73,8 @@ class MuslRecipe(BaseRecipe):
         if not os.path.exists(bdir):
             self.log.warning("musl build dir not found; skipping build.")
             return
-        self.run(["make", self.config.kernel.make_flags], cwd=bdir)
+        make_flags = self.config.kernel.make_flags.split()
+        self.run(["make"] + make_flags, cwd=bdir)
 
     def install(self) -> None:
         self.log.info("Installing musl into sysroot")

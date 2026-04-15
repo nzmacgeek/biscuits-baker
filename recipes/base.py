@@ -12,6 +12,7 @@ import abc
 import logging
 import os
 import subprocess
+import tarfile
 from typing import Any, Dict, List, Optional
 
 from config import Config
@@ -22,6 +23,25 @@ logger = logging.getLogger(__name__)
 
 class RecipeError(Exception):
     """Raised when a recipe step fails."""
+
+
+def safe_extract(tarball_path: str, dest_dir: str) -> None:
+    """Extract *tarball_path* into *dest_dir*, guarding against path traversal.
+
+    Raises:
+        RecipeError: if any archive member would extract outside *dest_dir*.
+    """
+    dest_dir = os.path.realpath(dest_dir)
+    with tarfile.open(tarball_path) as tf:
+        for member in tf.getmembers():
+            # Resolve the member path relative to dest_dir
+            member_path = os.path.realpath(os.path.join(dest_dir, member.name))
+            if not (member_path == dest_dir or member_path.startswith(dest_dir + os.sep)):
+                raise RecipeError(
+                    f"Refusing to extract {member.name!r}: path traversal detected "
+                    f"(would write outside {dest_dir!r})"
+                )
+        tf.extractall(dest_dir)  # noqa: S202 — members validated above
 
 
 class BaseRecipe(abc.ABC):

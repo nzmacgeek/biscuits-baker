@@ -88,3 +88,16 @@ class TestSetRootPassword:
         lines = (etc / "passwd").read_text().splitlines()
         root_entries = [l for l in lines if l.startswith("root:")]
         assert len(root_entries) == 1, "Should have exactly one root entry"
+
+    def test_shadow_permissions_enforced_on_existing_file(self, tmp_path):
+        """Shadow file must be 0o600 even when it already existed."""
+        sysroot = tmp_path / "sysroot"
+        etc = sysroot / "etc"
+        etc.mkdir(parents=True)
+        shadow = etc / "shadow"
+        shadow.write_text("root:OLD:0:0:99999:7:::\n")
+        # Set overly permissive mode before the call
+        shadow.chmod(0o644)
+        set_root_password(str(sysroot), "newpass")
+        mode = oct(shadow.stat().st_mode & 0o777)
+        assert mode == oct(0o600), f"shadow should be 0o600, got {mode}"

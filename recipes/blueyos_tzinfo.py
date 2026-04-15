@@ -49,6 +49,8 @@ class BlueyosTzinfoRecipe(BaseRecipe):
         src = self._source_dir
         payload = os.path.join(src, "payload")
         if os.path.isdir(payload):
+            # Merge each top-level entry from the payload into the sysroot root
+            # rather than targeting '.' directly (which could wipe the sysroot).
             self.sysroot.install_tree(payload, ".")
             self.log.info("Installed blueyos-tzinfo payload to sysroot")
         else:
