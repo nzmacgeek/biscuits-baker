@@ -81,7 +81,7 @@ Baker runs stages in order. You can run them individually for incremental builds
 | 2 | **kernel** | Runs `make tools-host` then `make` inside the biscuits repo; installs `build/kernel/bkernel` + `grub.cfg` to `sysroot/boot/` |
 | 3 | **toolchain** | Builds the `i686-elf` cross-compiler via `tools/make-libc-toolchain.sh`; builds and installs musl-blueyos via `tools/build-musl.sh` |
 | 4 | **build** | Builds each enabled component recipe in dependency order against musl-blueyos |
-| 5 | **package** | Calls `make package` (using `dpkbuild`) per component; falls back to `tar.gz`; copies all packages to `core/` |
+| 5 | **package** | Calls each component's `dpkbuild` packaging flow and copies the resulting `.dpk` files to `core/` |
 | 6 | **image** | Delegates to biscuits' `make iso` (GRUB-bootable ISO) or `make disk` (raw image) |
 
 ### Source repositories fetched during `prepare`
@@ -93,12 +93,24 @@ Baker runs stages in order. You can run them individually for incremental builds
 | `nzmacgeek/dimsim` | `src/dimsim/` |
 | `nzmacgeek/claw` | `src/claw/` |
 | `nzmacgeek/matey` | `src/matey/` |
-| `nzmacgeek/blueyos-bash` | `src/blueyos-bash/` |
+| `nzmacgeek/blueyos-bash` | `src/blueyos-bash/` (builds `ncurses`, `readline`, `bash`) |
 | `nzmacgeek/blueyos-tzinfo` | `src/blueyos-tzinfo/` |
+| `nzmacgeek/blueyos-base` | `src/blueyos-base/` |
+| `nzmacgeek/login-tools` | `src/login-tools/` |
+| `nzmacgeek/walkies` | `src/walkies/` |
 
 ---
 
 ## Command reference
+
+Global option for one-shot sysroot overrides:
+
+```bash
+baker --sysroot-target /path/to/sysroot <command>
+```
+
+This forces install/output paths to the given sysroot for that run only,
+without editing `baker.yaml`.
 
 ### `baker prepare`
 
@@ -165,6 +177,12 @@ Rebuild a single component repeatedly (fast edit/build loop):
 baker build --component matey
 ```
 
+Force that install into a specific sysroot target:
+
+```bash
+baker --sysroot-target /tmp/blueyos-sysroot build --component matey
+```
+
 When `--component` is used, Baker always checks that the component repo's
 local `main` is up to date with `origin/main` first (fetch + fast-forward pull).
 
@@ -188,9 +206,10 @@ Package each component and copy the results to `core/`.
 baker package
 ```
 
-For each component Baker tries `make package` (which calls `dpkbuild` to produce a `.dpk`).
-If `dpkbuild` is not available it falls back to a `tar.gz` archive. All packages are
-copied to `core/` so you can inspect them independently of the output directory.
+For each component Baker runs its packaging target with `dpkbuild` and expects a `.dpk`
+artifact. If `dpkbuild` is missing, Baker now fails that component's packaging step
+explicitly instead of silently producing a `tar.gz`. All produced packages are copied to
+`core/` so you can inspect them independently of the output directory.
 
 ---
 
@@ -295,6 +314,13 @@ network:
       url: "https://github.com/nzmacgeek/claw"
     - name: matey
       url: "https://github.com/nzmacgeek/matey"
+    - name: blueyos-base
+      url: "https://github.com/nzmacgeek/blueyos-base"
+    - name: login-tools
+      url: "https://github.com/nzmacgeek/login-tools"
+      branch: "master"
+    - name: walkies
+      url: "https://github.com/nzmacgeek/walkies"
     # add more repos here ...
   extra_repos: []
 
@@ -307,7 +333,17 @@ components:
     enabled: true
   - name: matey
     enabled: true
-  - name: blueyos-bash
+  - name: ncurses
+    enabled: true
+  - name: readline
+    enabled: true
+  - name: bash
+    enabled: true
+  - name: blueyos-base
+    enabled: true
+  - name: login-tools
+    enabled: true
+  - name: walkies
     enabled: true
   - name: blueyos-tzinfo
     enabled: true
@@ -401,7 +437,12 @@ biscuits-baker/
 │   ├── dimsim.py          Package manager + dpkbuild
 │   ├── claw.py            Init system
 │   ├── matey.py           Getty
-│   ├── blueyos_bash.py    Bash shell
+│   ├── ncurses.py         Terminal library from blueyos-bash repo
+│   ├── readline.py        GNU Readline from blueyos-bash repo
+│   ├── blueyos_bash.py    GNU Bash from blueyos-bash repo
+│   ├── blueyos_base.py    Core BlueyOS utilities
+│   ├── login_tools.py     Authentication and account tools
+│   ├── walkies.py         Network configuration utility
 │   └── blueyos_tzinfo.py  Timezone database
 │
 ├── helpers/

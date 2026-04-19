@@ -13,6 +13,7 @@ import os
 import shutil
 import subprocess
 
+from helpers.host_tools import build_host_env
 from stage_runner import Stage
 
 
@@ -55,6 +56,15 @@ class PrepareStage(Stage):
                 label="musl-blueyos",
             )
 
+        if cfg.network.glibc_blueyos_repo:
+            glibc_dest = os.path.join(cfg.abs_sources_dir, "glibc-blueyos")
+            self._fetch_repo(
+                cfg.network.glibc_blueyos_repo,
+                cfg.network.glibc_blueyos_branch,
+                glibc_dest,
+                label="glibc-blueyos",
+            )
+
         # Fetch dimsim repository
         if cfg.network.dimsim_repo:
             dimsim_dest = os.path.join(cfg.abs_sources_dir, "dimsim")
@@ -93,7 +103,7 @@ class PrepareStage(Stage):
 
         if os.path.isdir(os.path.join(dest, ".git")):
             self.log.info("Updating %s at %s", label or repo_url, dest)
-            self._git(["git", "pull", "--ff-only"], cwd=dest)
+            self._pull_latest(dest, branch, label or repo_url)
         else:
             self.log.info(
                 "Cloning %s from %s (branch %s) → %s", label or repo_url, repo_url, branch, dest
@@ -102,6 +112,62 @@ class PrepareStage(Stage):
             self._git(
                 ["git", "clone", "--branch", branch, "--depth", "1", repo_url, dest],
             )
+
+    def _pull_latest(self, repo_dir: str, branch: str, label: str) -> None:
+        """Fetch origin and fast-forward to the latest commit on *branch*."""
+        if shutil.which("git") is None:
+            return
+
+        # Fetch the specific branch from origin
+        result = subprocess.run(
+            ["git", "fetch", "origin", branch],
+            cwd=repo_dir,
+            capture_output=True,
+            text=True,
+            env=build_host_env(),
+        )
+        if result.returncode != 0:
+            self.log.warning(
+                "Failed to fetch origin/%s for %s: %s", branch, label, result.stderr.strip()
+            )
+            return
+
+        # Compare local HEAD with origin/<branch>
+        def _rev(ref: str) -> str | None:
+            r = subprocess.run(
+                ["git", "rev-parse", ref],
+                cwd=repo_dir,
+                capture_output=True,
+                text=True,
+                env=build_host_env(),
+            )
+            return r.stdout.strip() if r.returncode == 0 else None
+
+        local = _rev("HEAD")
+        remote = _rev(f"origin/{branch}")
+
+        if not local or not remote:
+            self.log.warning("Could not compare local vs origin/%s for %s", branch, label)
+            return
+
+        if local == remote:
+            self.log.info("%s is already up to date on %s", label, branch)
+            return
+
+        self.log.info("%s has new commits on %s — pulling (fast-forward)", label, branch)
+        result = subprocess.run(
+            ["git", "merge", "--ff-only", f"origin/{branch}"],
+            cwd=repo_dir,
+            capture_output=True,
+            text=True,
+            env=build_host_env(),
+        )
+        if result.returncode != 0:
+            self.log.warning(
+                "Fast-forward merge failed for %s: %s", label, result.stderr.strip()
+            )
+        else:
+            self.log.info("%s updated to %s", label, remote[:12])
 
     def _clone_or_pull(self, repo_url: str, base_dir: str) -> None:
         name = repo_url.rstrip("/").split("/")[-1].removesuffix(".git")
@@ -118,6 +184,7 @@ class PrepareStage(Stage):
         repos_to_check: list[tuple[str, str]] = [
             ("biscuits", cfg.abs_kernel_source),
             ("musl-blueyos", os.path.join(cfg.abs_kernel_source, "musl-blueyos")),
+            ("glibc-blueyos", os.path.join(cfg.abs_sources_dir, "glibc-blueyos")),
             ("dimsim", os.path.join(cfg.abs_sources_dir, "dimsim")),
         ]
         for pr in cfg.network.package_repos:
@@ -146,6 +213,12 @@ class PrepareStage(Stage):
             self.log.warning("git not found; skipping: %s", " ".join(cmd))
             return
         self.log.debug("git: %s", " ".join(cmd))
-        result = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True)
+        result = subprocess.run(
+            cmd,
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            env=build_host_env(),
+        )
         if result.returncode != 0:
             self.log.warning("git command failed: %s\n%s", " ".join(cmd), result.stderr)

@@ -4,6 +4,10 @@
 # Target architecture — biscuits defaults to i386
 arch: i386
 
+# Primary libc used for the bootable userland. Additional libc bootstrap
+# components can still be built as recipes.
+libc: musl-blueyos
+
 # Path to the kernel source tree (fetched/updated during prepare)
 kernel_source: src/biscuits
 
@@ -26,8 +30,11 @@ core_packages_dir: core
 # Leave empty to auto-detect (/opt/blueyos-sysroot if present, else build/musl).
 musl_prefix: ""
 
+# Path where the staged glibc-blueyos install image is produced.
+glibc_prefix: build/glibc-root/i686-pc-blueyos
+
 # Path where the cross-compiler toolchain will be installed
-toolchain_prefix: /opt/blueyos-cross
+toolchain_prefix: build/toolchains/i686-elf
 
 # Logging level: debug, info, warning, error
 log_level: info
@@ -44,6 +51,8 @@ network:
   kernel_branch: "main"
   musl_blueyos_repo: "https://github.com/nzmacgeek/musl-blueyos"
   musl_blueyos_branch: "main"
+  glibc_blueyos_repo: "https://github.com/nzmacgeek/glibc-blueyos"
+  glibc_blueyos_branch: "master"
   dimsim_repo: "https://github.com/nzmacgeek/dimsim"
   dimsim_branch: "main"
   package_repos:
@@ -59,11 +68,25 @@ network:
     - name: blueyos-tzinfo
       url: "https://github.com/nzmacgeek/blueyos-tzinfo"
       branch: "main"
+    - name: blueyos-base
+      url: "https://github.com/nzmacgeek/blueyos-base"
+      branch: "main"
+    - name: login-tools
+      url: "https://github.com/nzmacgeek/login-tools"
+      branch: "master"
+    - name: walkies
+      url: "https://github.com/nzmacgeek/walkies"
+      branch: "main"
+    - name: blueyos-archiving-tools
+      url: "https://github.com/nzmacgeek/blueyos-archiving-tools"
+      branch: "main"
   extra_repos: []
 
 # Components to include in the build (order matters for display; deps are resolved automatically)
 components:
   - name: musl-blueyos
+    enabled: true
+  - name: glibc-blueyos
     enabled: true
   - name: dimsim
     enabled: true
@@ -71,9 +94,21 @@ components:
     enabled: true
   - name: matey
     enabled: true
-  - name: blueyos-bash
+  - name: ncurses
+    enabled: true
+  - name: readline
+    enabled: true
+  - name: bash
     enabled: true
   - name: blueyos-tzinfo
+    enabled: true
+  - name: blueyos-base
+    enabled: true
+  - name: login-tools
+    enabled: true
+  - name: walkies
+    enabled: true
+  - name: blueyos-archiving-tools
     enabled: true
 
 # Components to explicitly exclude from the build
@@ -82,7 +117,7 @@ exclude: []
 # Image output options
 image:
   enabled: true
-  format: iso       # biscuits natively produces a GRUB-bootable ISO via make iso
+  format: disk      # biscuits natively produces a BlueyFS disk image via make disk
   size_mb: 64
-  output: output/blueyos.iso
+  output: output/blueyos-disk.img
   bootloader: grub

@@ -129,3 +129,20 @@ class TestSysrootInstaller:
 
         assert (sysroot / "existing.txt").is_file()
         assert (sysroot / "new.txt").is_file()
+
+    def test_install_tree_root_merge_preserves_existing_subdirs(self, tmp_path):
+        sysroot = tmp_path / "sysroot"
+        existing_usr_bin = sysroot / "usr" / "bin"
+        existing_usr_bin.mkdir(parents=True)
+        (existing_usr_bin / "existing-tool").write_text("keep")
+
+        payload = tmp_path / "payload"
+        payload_usr_bin = payload / "usr" / "bin"
+        payload_usr_bin.mkdir(parents=True)
+        (payload_usr_bin / "new-tool").write_text("new")
+
+        installer = SysrootInstaller(str(sysroot))
+        installer.install_tree(str(payload), ".")
+
+        assert (existing_usr_bin / "existing-tool").is_file()
+        assert (existing_usr_bin / "new-tool").is_file()

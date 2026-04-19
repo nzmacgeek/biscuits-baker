@@ -55,6 +55,7 @@ class TestSetRootPassword:
         set_root_password(str(sysroot), "testpass")
         passwd = (sysroot / "etc" / "passwd").read_text()
         assert "root:" in passwd
+        assert passwd.startswith("root:x:0:0:root:/root:/bin/sh\n")
 
     def test_update_shadow_preserves_existing_entries(self, tmp_path):
         sysroot = tmp_path / "sysroot"
@@ -88,6 +89,20 @@ class TestSetRootPassword:
         lines = (etc / "passwd").read_text().splitlines()
         root_entries = [l for l in lines if l.startswith("root:")]
         assert len(root_entries) == 1, "Should have exactly one root entry"
+
+    def test_ensure_passwd_prefers_bash_when_available(self, tmp_path):
+        sysroot = tmp_path / "sysroot"
+        etc = sysroot / "etc"
+        bin_dir = sysroot / "bin"
+        etc.mkdir(parents=True)
+        bin_dir.mkdir(parents=True)
+        (bin_dir / "bash").write_text("")
+        (etc / "passwd").write_text("root:x:0:0:root:/root:/bin/sh\n")
+
+        set_root_password(str(sysroot), "pass")
+
+        passwd = (etc / "passwd").read_text()
+        assert passwd.startswith("root:x:0:0:root:/root:/bin/bash\n")
 
     def test_shadow_permissions_enforced_on_existing_file(self, tmp_path):
         """Shadow file must be 0o600 even when it already existed."""

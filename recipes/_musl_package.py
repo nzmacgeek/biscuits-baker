@@ -5,8 +5,8 @@ Provides ``MuslPackageRecipe``, a convenience subclass of
 ``BaseRecipe`` that:
 
 * Sets ``CC`` / ``MUSL_PREFIX`` so ``make`` picks up the correct musl sysroot.
-* After a successful ``make``, tries ``make package`` (which calls
-  ``dpkbuild``) to produce a ``.dpk`` file.
+* After a successful ``make``, runs ``make package`` (which calls
+    ``dpkbuild``) and requires a ``.dpk`` file.
 * Copies the ``.dpk`` into ``output/`` for the PackageStage to collect.
 """
 
@@ -64,6 +64,7 @@ class MuslPackageRecipe(BaseRecipe):
         env = {"MUSL_PREFIX": musl_prefix}
         make_flags = self.config.kernel.make_flags.split()
         self.run(["make"] + make_flags, cwd=src, env=env)
+
     def install(self) -> None:
         src = self._source_dir
         build_out = os.path.join(src, "build", self.binary_name or self.name)
@@ -82,46 +83,25 @@ class MuslPackageRecipe(BaseRecipe):
         self.log.info("Installed %s → sysroot/%s", build_out, dest_rel)
 
     def package(self) -> str | None:
-        """Try ``make package`` (dpkbuild) first; fall back to tar.gz."""
+        """Build a required `.dpk` package for this component."""
         src = self._source_dir
         musl_prefix = self._resolve_musl_make_prefix()
 
-        dpkbuild_in_src = os.path.join(
-            self.config.abs_sources_dir, "dimsim", "bin", "dpkbuild"
-        )
-        dpkbuild = (
-            shutil.which("dpkbuild")
-            or (dpkbuild_in_src if os.path.isfile(dpkbuild_in_src) else None)
-        )
+        dpkbuild = self.resolve_dpkbuild()
+        env = {
+            "MUSL_PREFIX": musl_prefix,
+            "PATH": os.path.dirname(dpkbuild) + ":" + os.environ.get("PATH", ""),
+        }
 
-        if dpkbuild and os.path.isdir(src):
-            env = {
-                "MUSL_PREFIX": musl_prefix,
-                "PATH": os.path.dirname(dpkbuild) + ":" + os.environ.get("PATH", ""),
-            }
-            try:
-                self.run(["make", "package"], cwd=src, env=env)
-                # Find the produced .dpk file and copy it to output/
-                dpk_files = glob.glob(os.path.join(src, "*.dpk"))
-                if dpk_files:
-                    dest = os.path.join(self.config.abs_output_dir, os.path.basename(dpk_files[0]))
-                    shutil.copy2(dpk_files[0], dest)
-                    self.log.info("Package: %s", dest)
-                    return dest
-            except RecipeError as exc:
-                self.log.warning(
-                    "make package failed for %s: %s; falling back to tar.gz", self.name, exc
-                )
+        self.run(["make", "package"], cwd=src, env=env)
 
-        # Fallback: produce a tar.gz from the sysroot install paths
-        from helpers.packaging import PackageBuilder
+        dpk_files = glob.glob(os.path.join(src, "*.dpk"))
+        if not dpk_files:
+            raise RecipeError(
+                f"make package completed for {self.name}, but no .dpk was produced in {src}"
+            )
 
-        builder = PackageBuilder(self.config.abs_output_dir)
-        paths = self.install_paths or None
-        return builder.build_package(
-            name=self.name,
-            version=self.version,
-            sysroot=self.config.abs_sysroot,
-            include_paths=paths,
-            metadata={"arch": self.config.arch},
-        )
+        dest = os.path.join(self.config.abs_output_dir, os.path.basename(dpk_files[0]))
+        shutil.copy2(dpk_files[0], dest)
+        self.log.info("Package: %s", dest)
+        return dest

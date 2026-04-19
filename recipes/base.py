@@ -11,11 +11,13 @@ from __future__ import annotations
 import abc
 import logging
 import os
+import shutil
 import subprocess
 import tarfile
 from typing import Any, Dict, List, Optional
 
 from config import Config
+from helpers.host_tools import build_host_env
 from helpers.sysroot import SysrootInstaller
 
 logger = logging.getLogger(__name__)
@@ -118,6 +120,25 @@ class BaseRecipe(abc.ABC):
         )
         return pkg_path
 
+    def resolve_dpkbuild(self) -> str:
+        """Return the usable `dpkbuild` path or raise a clear error.
+
+        Baker prefers a host-installed `dpkbuild`, then a locally built copy
+        from the dimsim source tree, then a copy installed into the sysroot.
+        """
+        candidates = [
+            shutil.which("dpkbuild"),
+            os.path.join(self.config.abs_sources_dir, "dimsim", "bin", "dpkbuild"),
+            os.path.join(self.config.abs_sysroot, "usr", "bin", "dpkbuild"),
+        ]
+        for candidate in candidates:
+            if candidate and os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+                return candidate
+
+        raise RecipeError(
+            "dpkbuild not found. Build the 'dimsim' component first or install dpkbuild on PATH."
+        )
+
     # ------------------------------------------------------------------
     # Convenience helpers for subclasses
     # ------------------------------------------------------------------
@@ -141,7 +162,7 @@ class BaseRecipe(abc.ABC):
         result = subprocess.run(
             cmd,
             cwd=work_dir,
-            env=merged_env,
+            env=build_host_env(merged_env),
             capture_output=True,
             text=True,
         )

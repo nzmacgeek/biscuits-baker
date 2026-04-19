@@ -14,6 +14,7 @@ import subprocess
 import tarfile
 from typing import Optional
 
+from helpers.host_tools import build_host_env
 from config import ImageConfig
 
 logger = logging.getLogger(__name__)
@@ -142,6 +143,6 @@ class ImageBuilder:
     @staticmethod
     def _run(cmd: list, error_msg: str) -> None:
         logger.debug("Running: %s", " ".join(str(c) for c in cmd))
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        result = subprocess.run(cmd, capture_output=True, text=True, env=build_host_env())
         if result.returncode != 0:
             raise RuntimeError(f"{error_msg}\n{result.stderr}")

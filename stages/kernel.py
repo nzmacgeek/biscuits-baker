@@ -12,6 +12,7 @@ import os
 import shutil
 import subprocess
 
+from helpers.host_tools import build_host_env
 from stage_runner import Stage
 
 
@@ -90,7 +91,13 @@ class KernelStage(Stage):
             self.log.warning("make not found; skipping: %s", " ".join(cmd))
             return
         self.log.debug("Running: %s (cwd=%s)", " ".join(cmd), cwd)
-        result = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True)
+        result = subprocess.run(
+            cmd,
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            env=build_host_env(),
+        )
         if result.stdout:
             self.log.debug(result.stdout.rstrip())
         if result.stderr:

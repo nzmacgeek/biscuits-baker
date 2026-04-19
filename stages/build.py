@@ -11,6 +11,7 @@ import os
 import shutil
 import subprocess
 
+from helpers.host_tools import build_host_env
 from stage_runner import Stage
 from deps import resolve_build_order
 
@@ -142,7 +143,13 @@ class BuildStage(Stage):
             self.log.warning("Fast-forward pull failed for %s; continuing with current checkout", recipe_name)
 
     def _git_ok(self, cmd: list[str], cwd: str) -> bool:
-        result = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True)
+        result = subprocess.run(
+            cmd,
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            env=build_host_env(),
+        )
         if result.returncode != 0:
             if result.stderr:
                 self.log.debug(result.stderr.rstrip())
@@ -150,7 +157,13 @@ class BuildStage(Stage):
         return True
 
     def _git_capture(self, cmd: list[str], cwd: str) -> str | None:
-        result = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True)
+        result = subprocess.run(
+            cmd,
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            env=build_host_env(),
+        )
         if result.returncode != 0:
             if result.stderr:
                 self.log.debug(result.stderr.rstrip())

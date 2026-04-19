@@ -7,9 +7,11 @@ binaries, libraries, headers, and configuration files.
 
 from __future__ import annotations
 
+import errno
 import logging
 import os
 import shutil
+import subprocess
 from typing import List, Optional
 
 logger = logging.getLogger(__name__)
@@ -22,6 +24,91 @@ class SysrootInstaller:
         self.sysroot = os.path.abspath(sysroot)
 
     # ------------------------------------------------------------------
+    # Sudo escalation helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _run_sudo(cmd: List[str]) -> None:
+        """Run *cmd* prefixed with sudo, raising PermissionError on failure."""
+        full_cmd = ["sudo"] + cmd
+        result = subprocess.run(full_cmd, capture_output=True, text=True)
+        if result.returncode != 0:
+            raise PermissionError(
+                f"sudo command failed (exit {result.returncode}): {' '.join(full_cmd)}\n"
+                f"{result.stderr.strip()}"
+            )
+
+    def _fs_makedirs(self, path: str) -> None:
+        try:
+            os.makedirs(path, exist_ok=True)
+        except PermissionError as e:
+            if e.errno != errno.EACCES:
+                raise
+            logger.debug("makedirs %s: permission denied, retrying with sudo", path)
+            self._run_sudo(["mkdir", "-p", path])
+
+    def _fs_copy_file(self, src: str, dest: str) -> None:
+        try:
+            shutil.copy2(src, dest)
+        except PermissionError as e:
+            if e.errno != errno.EACCES:
+                raise
+            logger.debug("copy %s → %s: permission denied, retrying with sudo", src, dest)
+            self._run_sudo(["cp", "-p", src, dest])
+
+    def _fs_copy_tree(self, src: str, dest: str) -> None:
+        """Copy *src* tree to *dest* (dest must not already exist)."""
+        try:
+            shutil.copytree(src, dest, symlinks=True)
+        except PermissionError as e:
+            if e.errno != errno.EACCES:
+                raise
+            logger.debug("copytree %s → %s: permission denied, retrying with sudo", src, dest)
+            self._run_sudo(["cp", "-a", src, dest])
+
+    def _fs_remove(self, path: str) -> None:
+        try:
+            if os.path.isdir(path) and not os.path.islink(path):
+                shutil.rmtree(path)
+            else:
+                os.remove(path)
+        except PermissionError as e:
+            if e.errno != errno.EACCES:
+                raise
+            logger.debug("remove %s: permission denied, retrying with sudo", path)
+            self._run_sudo(["rm", "-rf", path])
+
+    def _fs_chmod(self, path: str, mode: int) -> None:
+        try:
+            os.chmod(path, mode)
+        except PermissionError as e:
+            if e.errno != errno.EACCES:
+                raise
+            logger.debug("chmod %s: permission denied, retrying with sudo", path)
+            self._run_sudo(["chmod", f"{mode:o}", path])
+
+    def _fs_chown(self, path: str, uid: int, gid: int) -> None:
+        try:
+            os.lchown(path, uid, gid)
+        except PermissionError as e:
+            if e.errno == errno.EACCES:
+                logger.debug("chown %s: permission denied, retrying with sudo", path)
+                self._run_sudo(["chown", "-h", f"{uid}:{gid}", path])
+            # EPERM means caller lacks privilege to assign this uid/gid (e.g. non-root
+            # trying to chown to uid 0) — silently skip rather than escalate.
+        except AttributeError:
+            pass  # Platform doesn't support chown
+
+    def _fs_symlink(self, target: str, link_path: str) -> None:
+        try:
+            os.symlink(target, link_path)
+        except PermissionError as e:
+            if e.errno != errno.EACCES:
+                raise
+            logger.debug("symlink %s → %s: permission denied, retrying with sudo", link_path, target)
+            self._run_sudo(["ln", "-sf", target, link_path])
+
+    # ------------------------------------------------------------------
     # Directory helpers
     # ------------------------------------------------------------------
 
@@ -31,7 +118,7 @@ class SysrootInstaller:
         Returns the absolute path.
         """
         path = os.path.join(self.sysroot, *rel_path_parts)
-        os.makedirs(path, exist_ok=True)
+        self._fs_makedirs(path)
         logger.debug("ensured dir: %s", path)
         return path
 
@@ -58,21 +145,18 @@ class SysrootInstaller:
             src: Absolute or relative source file path.
             dest_rel: Destination path relative to sysroot.
             mode: File permission bits (e.g. 0o755).  Preserved from source if None.
-            owner_uid: UID to assign (only effective when running as root).
-            owner_gid: GID to assign (only effective when running as root).
+            owner_uid: UID to assign (only effective when running as root or with sudo).
+            owner_gid: GID to assign (only effective when running as root or with sudo).
 
         Returns:
             Absolute destination path.
         """
         dest = os.path.join(self.sysroot, dest_rel.lstrip(os.sep))
-        os.makedirs(os.path.dirname(dest), exist_ok=True)
-        shutil.copy2(src, dest)
+        self._fs_makedirs(os.path.dirname(dest))
+        self._fs_copy_file(src, dest)
         if mode is not None:
-            os.chmod(dest, mode)
-        try:
-            os.lchown(dest, owner_uid, owner_gid)
-        except (AttributeError, PermissionError):
-            pass  # Not root or platform doesn't support chown
+            self._fs_chmod(dest, mode)
+        self._fs_chown(dest, owner_uid, owner_gid)
         logger.debug("installed %s → %s", src, dest)
         return dest
 
@@ -96,22 +180,46 @@ class SysrootInstaller:
             for item in os.listdir(src_dir):
                 s = os.path.join(src_dir, item)
                 d = os.path.join(self.sysroot, item)
-                if os.path.isdir(s) and not os.path.islink(s):
-                    if os.path.isdir(d):
-                        shutil.rmtree(d)
-                    elif os.path.exists(d):
-                        os.remove(d)
-                    shutil.copytree(s, d, symlinks=symlinks)
-                else:
-                    shutil.copy2(s, d)
+                self._merge_path(s, d, symlinks=symlinks)
             logger.debug("merged tree %s → %s (sysroot root)", src_dir, self.sysroot)
             return self.sysroot
 
         if os.path.exists(dest):
-            shutil.rmtree(dest)
-        shutil.copytree(src_dir, dest, symlinks=symlinks)
+            self._fs_remove(dest)
+        self._fs_copy_tree(src_dir, dest)
         logger.debug("installed tree %s → %s", src_dir, dest)
         return dest
+
+    def _merge_path(self, src: str, dest: str, symlinks: bool = True) -> None:
+        """Merge *src* into *dest* without deleting unrelated existing contents."""
+        if os.path.islink(src) and symlinks:
+            if os.path.lexists(dest):
+                self._remove_existing(dest)
+            self._fs_makedirs(os.path.dirname(dest))
+            self._fs_symlink(os.readlink(src), dest)
+            return
+
+        if os.path.isdir(src):
+            if os.path.lexists(dest) and not os.path.isdir(dest):
+                self._remove_existing(dest)
+            self._fs_makedirs(dest)
+            for item in os.listdir(src):
+                self._merge_path(
+                    os.path.join(src, item),
+                    os.path.join(dest, item),
+                    symlinks=symlinks,
+                )
+            return
+
+        if os.path.isdir(dest) and not os.path.islink(dest):
+            self._fs_remove(dest)
+        elif os.path.lexists(dest):
+            self._fs_remove(dest)
+        self._fs_makedirs(os.path.dirname(dest))
+        self._fs_copy_file(src, dest)
+
+    def _remove_existing(self, path: str) -> None:
+        self._fs_remove(path)
 
     def install_binary(self, src: str, dest_rel: Optional[str] = None) -> str:
         """Install an executable binary into bin/ (or *dest_rel*) with mode 0o755."""
@@ -142,10 +250,10 @@ class SysrootInstaller:
             Absolute link path.
         """
         link_abs = os.path.join(self.sysroot, link_rel.lstrip(os.sep))
-        os.makedirs(os.path.dirname(link_abs), exist_ok=True)
+        self._fs_makedirs(os.path.dirname(link_abs))
         if os.path.lexists(link_abs):
-            os.remove(link_abs)
-        os.symlink(target, link_abs)
+            self._fs_remove(link_abs)
+        self._fs_symlink(target, link_abs)
         logger.debug("symlink %s → %s", link_abs, target)
         return link_abs
 

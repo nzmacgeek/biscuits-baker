@@ -153,19 +153,29 @@ def _update_shadow(sysroot: str, pw_hash: str) -> None:
 def _ensure_passwd(sysroot: str) -> None:
     """Ensure /etc/passwd contains a root entry (creates minimal file if absent)."""
     passwd_path = os.path.join(sysroot, "etc", "passwd")
+    preferred_shell = "/bin/bash" if os.path.isfile(os.path.join(sysroot, "bin", "bash")) else "/bin/sh"
 
     # Minimal root passwd line (no password field — auth is via shadow)
-    root_line = "root:x:0:0:root:/root:/bin/sh\n"
+    root_line = f"root:x:0:0:root:/root:{preferred_shell}\n"
 
     if os.path.isfile(passwd_path):
         lines = _read_lines(passwd_path)
-        for line in lines:
+        for i, line in enumerate(lines):
             if line.startswith("root:"):
+                parts = line.rstrip("\n").split(":")
+                if len(parts) >= 7 and parts[6] != preferred_shell:
+                    parts[6] = preferred_shell
+                    lines[i] = ":".join(parts) + "\n"
+                    _write_lines(passwd_path, lines)
+                    os.chmod(passwd_path, 0o644)
+                    logger.debug("Updated root shell in %s", passwd_path)
+                    return
                 logger.debug("/etc/passwd already has a root entry; no change needed.")
                 return
         # root entry missing — prepend it
         lines.insert(0, root_line)
         _write_lines(passwd_path, lines)
+        os.chmod(passwd_path, 0o644)
         logger.debug("Added root entry to %s", passwd_path)
     else:
         _write_lines(passwd_path, [root_line])

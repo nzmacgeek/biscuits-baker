@@ -3,11 +3,12 @@ recipes/claw.py - Recipe for claw (init system for BlueyOS).
 
 claw uses autotools (./autogen.sh + ./configure + make).  It links
 statically against musl-blueyos and produces a single ``claw`` binary
-installed to ``/sbin/init`` (with a symlink from ``/bin/init``).
+    installed to ``/sbin/claw`` (with compatibility symlinks for init paths).
 """
 
 from __future__ import annotations
 
+import glob
 import os
 import shutil
 
@@ -22,8 +23,8 @@ class ClawRecipe(MuslPackageRecipe):
     version = "1.0.0"
     dependencies = ["musl-blueyos"]
     binary_name = "claw"
-    binary_dest = "sbin/init"
-    install_paths = ["sbin/init", "bin/init"]
+    binary_dest = "sbin/claw"
+    install_paths = ["sbin/claw", "sbin/init", "bin/init"]
 
     def configure(self) -> None:
         src = self._source_dir
@@ -31,8 +32,7 @@ class ClawRecipe(MuslPackageRecipe):
             raise RecipeError(f"claw source not found at {src}")
 
         musl_prefix = self.config.abs_musl_prefix
-        toolchain_prefix = self.config.toolchain_prefix
-        cross_cc = os.path.join(toolchain_prefix, "bin", "i386-blueyos-elf-gcc")
+        toolchain_prefix = self.config.abs_toolchain_prefix
 
         # Run autogen.sh if configure script doesn't exist yet
         configure_script = os.path.join(src, "configure")
@@ -52,14 +52,6 @@ class ClawRecipe(MuslPackageRecipe):
             "BLUEYOS_CROSS": toolchain_prefix,
             "BLUEYOS_SYSROOT": musl_prefix,
         }
-        if os.path.isfile(cross_cc):
-            env["CC"] = cross_cc
-            self.log.info("Using cross compiler for claw: %s", cross_cc)
-        else:
-            self.log.warning(
-                "Cross compiler not found at %s; configure may fall back to host compiler.",
-                cross_cc,
-            )
 
         configure_wrapper = os.path.join(src, "configure-blueyos")
         if os.path.isfile(configure_wrapper):
@@ -80,9 +72,7 @@ class ClawRecipe(MuslPackageRecipe):
         self.run(
             [
                 "./configure",
-                "--host=i386-blueyos-elf",
                 "--enable-static-binary",
-                f"--with-sysroot={musl_prefix}",
                 "--prefix=/",
                 "--sbindir=/sbin",
                 "--bindir=/bin",
@@ -102,31 +92,44 @@ class ClawRecipe(MuslPackageRecipe):
 
         make_flags = self.config.kernel.make_flags.split()
         musl_prefix = self.config.abs_musl_prefix
-        toolchain_prefix = self.config.toolchain_prefix
-        cross_cc = os.path.join(toolchain_prefix, "bin", "i386-blueyos-elf-gcc")
+        toolchain_prefix = self.config.abs_toolchain_prefix
 
         env = {
             "MUSL_PREFIX": musl_prefix,
             "BLUEYOS_CROSS": toolchain_prefix,
             "BLUEYOS_SYSROOT": musl_prefix,
         }
-        if os.path.isfile(cross_cc):
-            env["CC"] = cross_cc
 
         self.log.info("Building %s against musl sysroot at %s", self.name, musl_prefix)
         self.run(["make"] + make_flags, cwd=src, env=env)
 
     def install(self) -> None:
         src = self._source_dir
-        # Look for claw binary in common locations
-        for candidate in ("build/claw", "claw", "src/claw"):
-            path = os.path.join(src, candidate)
-            if os.path.isfile(path):
-                self.sysroot.ensure_dir("sbin")
-                self.sysroot.install_binary(path, "sbin/init")
-                # Also create /bin/init symlink pointing to /sbin/init
-                self.sysroot.ensure_dir("bin")
-                self.sysroot.symlink("/sbin/init", "bin/init")
-                self.log.info("Installed claw → sysroot/sbin/init")
-                return
-        self.log.warning("claw binary not found after build; skipping install.")
+        staging_dir = os.path.join(self._build_dir, "sysroot-staging")
+        if os.path.isdir(staging_dir):
+            shutil.rmtree(staging_dir)
+        os.makedirs(staging_dir, exist_ok=True)
+
+        self.run(["make", "install", f"DESTDIR={staging_dir}"], cwd=src)
+        self.sysroot.install_tree(staging_dir, ".")
+        self.sysroot.symlink("/sbin/claw", "sbin/init")
+        self.sysroot.symlink("/sbin/claw", "bin/init")
+        self.log.info("Installed claw payload into %s", self.config.abs_sysroot)
+
+    def package(self) -> str | None:
+        src = self._source_dir
+        dist_dir = os.path.join(src, "dist")
+        os.makedirs(dist_dir, exist_ok=True)
+        for existing in glob.glob(os.path.join(dist_dir, "*.dpk")):
+            os.remove(existing)
+
+        self.run(["make", "package"], cwd=src)
+
+        dpk_files = sorted(glob.glob(os.path.join(dist_dir, "*.dpk")))
+        if not dpk_files:
+            raise RecipeError(f"make package completed for {self.name}, but no .dpk was produced in {dist_dir}")
+
+        dest = os.path.join(self.config.abs_output_dir, os.path.basename(dpk_files[0]))
+        shutil.copy2(dpk_files[0], dest)
+        self.log.info("Package: %s", dest)
+        return dest

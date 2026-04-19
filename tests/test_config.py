@@ -36,6 +36,20 @@ class TestLoadConfigDefaults:
         assert os.path.isabs(cfg.abs_output_dir)
         assert os.path.isabs(cfg.abs_build_dir)
 
+    def test_default_package_repos_include_blueyos_userland(self, tmp_path):
+        cfg = load_config(str(tmp_path / "no.yaml"))
+        repos = {repo.name: repo.branch for repo in cfg.network.package_repos}
+
+        assert repos["blueyos-base"] == "main"
+        assert repos["login-tools"] == "master"
+        assert repos["walkies"] == "main"
+        assert cfg.network.glibc_blueyos_repo.endswith("glibc-blueyos")
+
+    def test_default_paths_include_local_toolchain_and_glibc_prefixes(self, tmp_path):
+        cfg = load_config(str(tmp_path / "no.yaml"))
+        assert cfg.abs_toolchain_prefix.endswith(os.path.join("build", "toolchains", "i686-elf"))
+        assert cfg.abs_glibc_prefix.endswith(os.path.join("build", "glibc-root", "i686-pc-blueyos"))
+
 
 class TestLoadConfigFromFile:
     """load_config correctly reads and merges values from baker.yaml."""
@@ -92,7 +106,7 @@ class TestLoadConfigFromFile:
             tmp_path,
             """
             components:
-              - name: musl
+              - name: glibc-blueyos
                 enabled: true
               - name: busybox
                 enabled: false
@@ -101,7 +115,7 @@ class TestLoadConfigFromFile:
         cfg = load_config(path)
         assert len(cfg.components) == 2
         names = {c.name for c in cfg.components}
-        assert names == {"musl", "busybox"}
+        assert names == {"glibc-blueyos", "busybox"}
         disabled = [c for c in cfg.components if c.name == "busybox"]
         assert disabled[0].enabled is False
 

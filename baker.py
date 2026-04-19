@@ -85,6 +85,14 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Enable debug-level logging",
     )
+    parser.add_argument(
+        "--sysroot-target",
+        "--force-sysroot",
+        dest="sysroot_target",
+        metavar="PATH",
+        default=None,
+        help="Force install/output sysroot target for this run (overrides baker.yaml sysroot)",
+    )
 
     subparsers = parser.add_subparsers(dest="command", metavar="COMMAND")
     subparsers.required = True
@@ -244,6 +252,14 @@ def main(argv: list = None) -> int:
 
     # Load configuration
     cfg = load_config(args.config)
+
+    # Optional one-shot sysroot override from CLI
+    if args.sysroot_target:
+        config_dir = os.path.abspath(os.path.dirname(args.config))
+        forced = args.sysroot_target
+        forced_abs = forced if os.path.isabs(forced) else os.path.abspath(os.path.join(config_dir, forced))
+        cfg.abs_sysroot = forced_abs
+        cfg.sysroot = forced_abs
 
     # Set up logging (CLI --verbose overrides config file)
     log_level = "debug" if args.verbose else cfg.log_level

@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 
 DEFAULTS: Dict[str, Any] = {
     "arch": "i386",
+    "libc": "musl-blueyos",
     "kernel_source": "src/biscuits",
     "sysroot": "sysroot",
     "output_dir": "output",
@@ -30,6 +31,7 @@ DEFAULTS: Dict[str, Any] = {
     "core_packages_dir": "core",
     "log_level": "info",
     "musl_prefix": "",
+    "glibc_prefix": "",
     "toolchain_prefix": "/opt/blueyos-cross",
     "kernel": {
         "config": "",
@@ -41,6 +43,8 @@ DEFAULTS: Dict[str, Any] = {
         "kernel_branch": "main",
         "musl_blueyos_repo": "https://github.com/nzmacgeek/musl-blueyos",
         "musl_blueyos_branch": "main",
+        "glibc_blueyos_repo": "https://github.com/nzmacgeek/glibc-blueyos",
+        "glibc_blueyos_branch": "master",
         "dimsim_repo": "https://github.com/nzmacgeek/dimsim",
         "dimsim_branch": "main",
         "package_repos": [
@@ -48,6 +52,9 @@ DEFAULTS: Dict[str, Any] = {
             {"name": "matey",          "url": "https://github.com/nzmacgeek/matey",          "branch": "main"},
             {"name": "blueyos-bash",   "url": "https://github.com/nzmacgeek/blueyos-bash",   "branch": "main"},
             {"name": "blueyos-tzinfo", "url": "https://github.com/nzmacgeek/blueyos-tzinfo", "branch": "main"},
+            {"name": "blueyos-base",   "url": "https://github.com/nzmacgeek/blueyos-base",   "branch": "main"},
+            {"name": "login-tools",    "url": "https://github.com/nzmacgeek/login-tools",    "branch": "master"},
+            {"name": "walkies",        "url": "https://github.com/nzmacgeek/walkies",        "branch": "main"},
         ],
         "extra_repos": [],
     },
@@ -88,6 +95,8 @@ class NetworkConfig:
     kernel_branch: str = "main"
     musl_blueyos_repo: str = "https://github.com/nzmacgeek/musl-blueyos"
     musl_blueyos_branch: str = "main"
+    glibc_blueyos_repo: str = "https://github.com/nzmacgeek/glibc-blueyos"
+    glibc_blueyos_branch: str = "master"
     dimsim_repo: str = "https://github.com/nzmacgeek/dimsim"
     dimsim_branch: str = "main"
     package_repos: List[PackageRepoEntry] = field(default_factory=list)
@@ -113,6 +122,7 @@ class ImageConfig:
 @dataclass
 class Config:
     arch: str = "i386"
+    libc: str = "musl-blueyos"
     kernel_source: str = "src/biscuits"
     sysroot: str = "sysroot"
     output_dir: str = "output"
@@ -121,6 +131,7 @@ class Config:
     core_packages_dir: str = "core"
     log_level: str = "info"
     musl_prefix: str = ""
+    glibc_prefix: str = ""
     toolchain_prefix: str = "/opt/blueyos-cross"
     kernel: KernelConfig = field(default_factory=KernelConfig)
     network: NetworkConfig = field(default_factory=NetworkConfig)
@@ -136,6 +147,8 @@ class Config:
     abs_kernel_source: str = ""
     abs_core_packages_dir: str = ""
     abs_musl_prefix: str = ""
+    abs_glibc_prefix: str = ""
+    abs_toolchain_prefix: str = ""
 
 
 # ---------------------------------------------------------------------------
@@ -166,6 +179,19 @@ def _has_musl_layout(prefix: str) -> bool:
     usr_include = os.path.isdir(os.path.join(prefix, "usr", "include"))
     usr_libc = os.path.isfile(os.path.join(prefix, "usr", "lib", "libc.a"))
     return (direct_include and direct_libc) or (usr_include and usr_libc)
+
+
+def _resolve_path(base_dir: str, value: str) -> str:
+    if os.path.isabs(value):
+        return value
+    return os.path.normpath(os.path.join(base_dir, value))
+
+
+def _is_writable_or_creatable(path: str) -> bool:
+    if os.path.exists(path):
+        return os.access(path, os.W_OK)
+    parent = os.path.dirname(path)
+    return os.path.isdir(parent) and os.access(parent, os.W_OK)
 
 
 def load_config(path: str = "baker.yaml") -> Config:
@@ -207,6 +233,8 @@ def load_config(path: str = "baker.yaml") -> Config:
         kernel_branch=n.get("kernel_branch", "main"),
         musl_blueyos_repo=n.get("musl_blueyos_repo", DEFAULTS["network"]["musl_blueyos_repo"]),
         musl_blueyos_branch=n.get("musl_blueyos_branch", "main"),
+        glibc_blueyos_repo=n.get("glibc_blueyos_repo", DEFAULTS["network"]["glibc_blueyos_repo"]),
+        glibc_blueyos_branch=n.get("glibc_blueyos_branch", DEFAULTS["network"]["glibc_blueyos_branch"]),
         dimsim_repo=n.get("dimsim_repo", DEFAULTS["network"]["dimsim_repo"]),
         dimsim_branch=n.get("dimsim_branch", "main"),
         package_repos=pkg_repos,
@@ -237,6 +265,7 @@ def load_config(path: str = "baker.yaml") -> Config:
 
     cfg = Config(
         arch=str(data.get("arch", "i386")),
+        libc=str(data.get("libc", "musl-blueyos")),
         kernel_source=str(data.get("kernel_source", "src/biscuits")),
         sysroot=str(data.get("sysroot", "sysroot")),
         output_dir=str(data.get("output_dir", "output")),
@@ -245,6 +274,7 @@ def load_config(path: str = "baker.yaml") -> Config:
         core_packages_dir=str(data.get("core_packages_dir", "core")),
         log_level=str(data.get("log_level", "info")),
         musl_prefix=str(data.get("musl_prefix", "")),
+        glibc_prefix=str(data.get("glibc_prefix", "")),
         toolchain_prefix=str(data.get("toolchain_prefix", "/opt/blueyos-cross")),
         kernel=kernel,
         network=network,
@@ -262,13 +292,16 @@ def load_config(path: str = "baker.yaml") -> Config:
     cfg.abs_kernel_source = os.path.join(base_dir, cfg.kernel_source)
     cfg.abs_core_packages_dir = os.path.join(base_dir, cfg.core_packages_dir)
 
+    if cfg.toolchain_prefix:
+        cfg.abs_toolchain_prefix = _resolve_path(base_dir, cfg.toolchain_prefix)
+    else:
+        cfg.abs_toolchain_prefix = "/opt/blueyos-cross"
+    if not _is_writable_or_creatable(cfg.abs_toolchain_prefix):
+        cfg.abs_toolchain_prefix = os.path.join(cfg.abs_build_dir, "toolchains", "i686-elf")
+
     # Resolve musl prefix: explicit config → valid /opt/blueyos-sysroot → build/musl
     if cfg.musl_prefix:
-        # Resolve relative to config file directory, same as all other paths
-        if os.path.isabs(cfg.musl_prefix):
-            cfg.abs_musl_prefix = cfg.musl_prefix
-        else:
-            cfg.abs_musl_prefix = os.path.normpath(os.path.join(base_dir, cfg.musl_prefix))
+        cfg.abs_musl_prefix = _resolve_path(base_dir, cfg.musl_prefix)
     else:
         opt_sysroot = "/opt/blueyos-sysroot"
         if _has_musl_layout(opt_sysroot):
@@ -282,5 +315,14 @@ def load_config(path: str = "baker.yaml") -> Config:
                     opt_sysroot,
                     cfg.abs_musl_prefix,
                 )
+
+    if cfg.glibc_prefix:
+        cfg.abs_glibc_prefix = _resolve_path(base_dir, cfg.glibc_prefix)
+    else:
+        cfg.abs_glibc_prefix = os.path.join(
+            cfg.abs_build_dir,
+            "glibc-root",
+            "i686-pc-blueyos",
+        )
 
     return cfg

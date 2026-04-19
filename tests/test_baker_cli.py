@@ -92,6 +92,10 @@ class TestCLIParsing:
         args = self._parse(["--verbose", "build"])
         assert args.verbose is True
 
+    def test_sysroot_target_flag(self):
+        args = self._parse(["--sysroot-target", "/tmp/custom-sysroot", "build"])
+        assert args.sysroot_target == "/tmp/custom-sysroot"
+
     def test_no_command_raises(self):
         parser = baker.build_parser()
         with pytest.raises(SystemExit):
@@ -128,3 +132,20 @@ class TestMainIntegration:
         cfg.write_text("sysroot: sysroot\noutput_dir: output\nbuild_dir: build\n")
         rc = baker.main(["--config", str(cfg), "clean"])
         assert rc == 0
+
+    def test_clean_honors_forced_sysroot_target(self, tmp_path):
+        cfg = tmp_path / "baker.yaml"
+        cfg.write_text("sysroot: sysroot\noutput_dir: output\nbuild_dir: build\n")
+
+        forced = tmp_path / "forced-sysroot"
+        forced.mkdir(parents=True, exist_ok=True)
+        (forced / "marker").write_text("x")
+
+        rc = baker.main([
+            "--config", str(cfg),
+            "--sysroot-target", str(forced),
+            "clean", "--sysroot",
+        ])
+
+        assert rc == 0
+        assert not forced.exists()

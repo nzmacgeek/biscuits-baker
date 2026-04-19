@@ -58,39 +58,18 @@ class BlueyosTzinfoRecipe(BaseRecipe):
 
     def package(self) -> str | None:
         src = self._source_dir
-        dpkbuild_in_src = os.path.join(
-            self.config.abs_sources_dir, "dimsim", "bin", "dpkbuild"
-        )
-        dpkbuild = (
-            shutil.which("dpkbuild")
-            or (dpkbuild_in_src if os.path.isfile(dpkbuild_in_src) else None)
-        )
+        dpkbuild = self.resolve_dpkbuild()
+        env = {
+            "PATH": os.path.dirname(dpkbuild) + ":" + os.environ.get("PATH", ""),
+        }
+        self.run(["make", "dpk"], cwd=src, env=env)
+        dpk_files = glob.glob(os.path.join(src, "*.dpk"))
+        if not dpk_files:
+            raise RecipeError(
+                f"make dpk completed for {self.name}, but no .dpk was produced in {src}"
+            )
 
-        if dpkbuild and os.path.isdir(src):
-            env = {
-                "PATH": os.path.dirname(dpkbuild) + ":" + os.environ.get("PATH", ""),
-            }
-            try:
-                self.run(["make", "dpk"], cwd=src, env=env)
-                dpk_files = glob.glob(os.path.join(src, "*.dpk"))
-                if dpk_files:
-                    dest = os.path.join(
-                        self.config.abs_output_dir, os.path.basename(dpk_files[0])
-                    )
-                    shutil.copy2(dpk_files[0], dest)
-                    self.log.info("Package: %s", dest)
-                    return dest
-            except RecipeError as exc:
-                self.log.warning("make dpk failed: %s; falling back to tar.gz", exc)
-
-        # Fallback: tar.gz of the payload
-        from helpers.packaging import PackageBuilder
-
-        builder = PackageBuilder(self.config.abs_output_dir)
-        return builder.build_package(
-            name=self.name,
-            version=self.version,
-            sysroot=self.config.abs_sysroot,
-            include_paths=["usr/share/zoneinfo"],
-            metadata={"arch": "noarch"},
-        )
+        dest = os.path.join(self.config.abs_output_dir, os.path.basename(dpk_files[0]))
+        shutil.copy2(dpk_files[0], dest)
+        self.log.info("Package: %s", dest)
+        return dest
