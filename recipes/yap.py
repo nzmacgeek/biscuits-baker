@@ -49,7 +49,10 @@ class YapRecipe(MuslPackageRecipe):
     def package(self) -> str | None:
         src = self._source_dir
         for existing in glob.glob(os.path.join(src, "yap-*.dpk")):
-            os.remove(existing)
+            try:
+                os.remove(existing)
+            except OSError as exc:
+                raise RecipeError(f"Failed to remove stale package artifact {existing}: {exc}") from exc
 
         dpkbuild = self.resolve_dpkbuild()
         env = {
@@ -61,6 +64,10 @@ class YapRecipe(MuslPackageRecipe):
 
         dpk_files = glob.glob(os.path.join(src, f"yap-{self.version}*.dpk"))
         if not dpk_files:
+            self.log.warning(
+                "No version-matched package artifacts found for %s; falling back to yap-*.dpk",
+                self.version,
+            )
             dpk_files = glob.glob(os.path.join(src, "yap-*.dpk"))
         if not dpk_files:
             raise RecipeError(
