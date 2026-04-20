@@ -65,7 +65,7 @@ class YapRecipe(MuslPackageRecipe):
         dpk_files = glob.glob(os.path.join(src, f"yap-{self.version}*.dpk"))
         if not dpk_files:
             self.log.warning(
-                "No version-matched package artifacts found for %s; falling back to yap-*.dpk",
+                "No version-matched package artifacts found for version %s; searching for yap-*.dpk files instead. This may indicate a build issue.",
                 self.version,
             )
             dpk_files = glob.glob(os.path.join(src, "yap-*.dpk"))
