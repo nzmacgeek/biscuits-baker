@@ -23,6 +23,7 @@ from recipes.blueyos_base import BlueyosBaseRecipe
 from recipes.blueyos_archiving_tools import BlueyosArchivingToolsRecipe
 from recipes.login_tools import LoginToolsRecipe
 from recipes.walkies import WalkiesRecipe
+from recipes.scout import ScoutRecipe
 
 # ---------------------------------------------------------------------------
 # All known recipe classes
@@ -42,6 +43,7 @@ RECIPE_CLASSES: List[Type[BaseRecipe]] = [
     BlueyosArchivingToolsRecipe,
     LoginToolsRecipe,
     WalkiesRecipe,
+    ScoutRecipe,
 ]
 
 
