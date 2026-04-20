@@ -74,7 +74,13 @@ class YapRecipe(MuslPackageRecipe):
                 f"make package completed for {self.name}, but no .dpk was produced in {src}"
             )
 
-        dpk_file = max(dpk_files, key=os.path.getmtime)
+        dpk_file = dpk_files[0]
+        if len(dpk_files) > 1:
+            self.log.warning(
+                "Multiple package artifacts found for %s; selecting newest by mtime",
+                self.name,
+            )
+            dpk_file = max(dpk_files, key=os.path.getmtime)
         dest = os.path.join(self.config.abs_output_dir, os.path.basename(dpk_file))
         shutil.copy2(dpk_file, dest)
         self.log.info("Package: %s", dest)
