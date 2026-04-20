@@ -98,6 +98,7 @@ Baker runs stages in order. You can run them individually for incremental builds
 | `nzmacgeek/blueyos-base` | `src/blueyos-base/` |
 | `nzmacgeek/login-tools` | `src/login-tools/` |
 | `nzmacgeek/walkies` | `src/walkies/` |
+| `nzmacgeek/yap` | `src/yap/` |
 
 ---
 

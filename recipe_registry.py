@@ -14,6 +14,7 @@ from recipes.musl_blueyos import MuslBlueyosRecipe
 from recipes.glibc_blueyos import GlibcBlueyosRecipe
 from recipes.dimsim import DimsimRecipe
 from recipes.claw import ClawRecipe
+from recipes.yap import YapRecipe
 from recipes.matey import MateyRecipe
 from recipes.ncurses import NcursesRecipe
 from recipes.readline import ReadlineRecipe
@@ -34,6 +35,7 @@ RECIPE_CLASSES: List[Type[BaseRecipe]] = [
     GlibcBlueyosRecipe,
     DimsimRecipe,
     ClawRecipe,
+    YapRecipe,
     MateyRecipe,
     NcursesRecipe,
     ReadlineRecipe,
