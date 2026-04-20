@@ -33,7 +33,7 @@ class YapRecipe(MuslPackageRecipe):
         src = self._source_dir
         if not os.path.isdir(src):
             raise RecipeError(
-                f"{self.name} source not found at {src}.  Run 'baker prepare' first."
+                f"{self.name} source not found at {src}. Run 'baker prepare' first."
             )
         staging_dir = os.path.join(self._build_dir, "sysroot-staging")
         if os.path.isdir(staging_dir):
