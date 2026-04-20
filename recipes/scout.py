@@ -132,8 +132,10 @@ class ScoutRecipe(MuslPackageRecipe):
             os.remove(existing)
 
         dpkbuild = self.resolve_dpkbuild()
+        musl_prefix = self._resolve_musl_make_prefix()
         env = {
             "PATH": os.path.dirname(dpkbuild) + ":" + os.environ.get("PATH", ""),
+            "MUSL_PREFIX": musl_prefix,
         }
 
         self.run(["make", "package"], cwd=build_dir, env=env)
