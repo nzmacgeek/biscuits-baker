@@ -100,10 +100,12 @@ class ScoutRecipe(MuslPackageRecipe):
                 f"scout build directory not found at {build_dir}.  Run 'baker configure' first."
             )
 
+        musl_prefix = self._resolve_musl_make_prefix()
         make_flags = self.config.kernel.make_flags.split()
-        self.log.info("Building scout in %s", build_dir)
-        self.run(["make"] + make_flags, cwd=build_dir)
+        env = {"MUSL_PREFIX": musl_prefix}
 
+        self.log.info("Building scout in %s with musl prefix %s", build_dir, musl_prefix)
+        self.run(["make"] + make_flags, cwd=build_dir, env=env)
     def install(self) -> None:
         build_dir = self._build_dir
         if not os.path.isdir(build_dir):
