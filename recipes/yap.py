@@ -52,7 +52,9 @@ class YapRecipe(MuslPackageRecipe):
             try:
                 os.remove(existing)
             except OSError as exc:
-                raise RecipeError(f"Failed to remove stale package artifact {existing}: {exc}") from exc
+                raise RecipeError(
+                    f"Failed to remove stale package artifact {existing}: {str(exc)}"
+                ) from exc
 
         dpkbuild = self.resolve_dpkbuild()
         env = {
@@ -74,7 +76,6 @@ class YapRecipe(MuslPackageRecipe):
                 f"make package completed for {self.name}, but no .dpk was produced in {src}"
             )
 
-        dpk_files = sorted(dpk_files)
         if len(dpk_files) > 1:
             raise RecipeError(
                 f"Multiple package artifacts found for {self.name}: {', '.join(dpk_files)}"
