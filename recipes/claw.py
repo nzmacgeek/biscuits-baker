@@ -52,7 +52,7 @@ class ClawRecipe(MuslPackageRecipe):
 
     def _standalone_env(self) -> dict[str, str]:
         return {
-            "MUSL_PREFIX": os.path.join(self.config.abs_build_dir, "toolchains", "i686-elf", "musl"),
+            "MUSL_PREFIX": self._resolve_musl_make_prefix(),
         }
 
     def build(self) -> None:

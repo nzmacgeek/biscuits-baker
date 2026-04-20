@@ -31,6 +31,10 @@ class YapRecipe(MuslPackageRecipe):
 
     def install(self) -> None:
         src = self._source_dir
+        if not os.path.isdir(src):
+            raise RecipeError(
+                f"{self.name} source not found at {src}.  Run 'baker prepare' first."
+            )
         staging_dir = os.path.join(self._build_dir, "sysroot-staging")
         if os.path.isdir(staging_dir):
             shutil.rmtree(staging_dir)
@@ -44,6 +48,9 @@ class YapRecipe(MuslPackageRecipe):
 
     def package(self) -> str | None:
         src = self._source_dir
+        for existing in glob.glob(os.path.join(src, "yap-*.dpk")):
+            os.remove(existing)
+
         dpkbuild = self.resolve_dpkbuild()
         env = {
             "MUSL_PREFIX": self._resolve_musl_make_prefix(),
@@ -52,14 +59,17 @@ class YapRecipe(MuslPackageRecipe):
 
         self.run(["make", "package"], cwd=src, env=env)
 
-        dpk_files = sorted(glob.glob(os.path.join(src, "yap-*.dpk")))
+        dpk_files = glob.glob(os.path.join(src, f"yap-{self.version}*.dpk"))
+        if not dpk_files:
+            dpk_files = glob.glob(os.path.join(src, "yap-*.dpk"))
         if not dpk_files:
             raise RecipeError(
                 f"make package completed for {self.name}, but no .dpk was produced in {src}"
             )
 
-        dest = os.path.join(self.config.abs_output_dir, os.path.basename(dpk_files[0]))
-        shutil.copy2(dpk_files[0], dest)
+        dpk_file = max(dpk_files, key=os.path.getmtime)
+        dest = os.path.join(self.config.abs_output_dir, os.path.basename(dpk_file))
+        shutil.copy2(dpk_file, dest)
         self.log.info("Package: %s", dest)
         return dest
 
