@@ -49,6 +49,7 @@ DEFAULTS: Dict[str, Any] = {
         "dimsim_branch": "main",
         "package_repos": [
             {"name": "claw",           "url": "https://github.com/nzmacgeek/claw",           "branch": "main"},
+            {"name": "yap",            "url": "https://github.com/nzmacgeek/yap",            "branch": "main"},
             {"name": "matey",          "url": "https://github.com/nzmacgeek/matey",          "branch": "main"},
             {"name": "blueyos-bash",   "url": "https://github.com/nzmacgeek/blueyos-bash",   "branch": "main"},
             {"name": "blueyos-tzinfo", "url": "https://github.com/nzmacgeek/blueyos-tzinfo", "branch": "main"},

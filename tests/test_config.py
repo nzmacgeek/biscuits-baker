@@ -43,6 +43,7 @@ class TestLoadConfigDefaults:
         assert repos["blueyos-base"] == "main"
         assert repos["login-tools"] == "master"
         assert repos["walkies"] == "main"
+        assert repos["yap"] == "main"
         assert cfg.network.glibc_blueyos_repo.endswith("glibc-blueyos")
 
     def test_default_paths_include_local_toolchain_and_glibc_prefixes(self, tmp_path):

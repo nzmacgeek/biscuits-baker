@@ -19,6 +19,7 @@ def test_registry_includes_new_blueyos_userland_recipes(tmp_path):
     assert "blueyos-archiving-tools" in recipes
     assert "login-tools" in recipes
     assert "walkies" in recipes
+    assert "yap" in recipes
     assert "ncurses" in recipes
     assert "readline" in recipes
     assert "bash" in recipes

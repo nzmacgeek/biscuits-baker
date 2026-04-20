@@ -59,6 +59,9 @@ network:
     - name: claw
       url: "https://github.com/nzmacgeek/claw"
       branch: "main"
+    - name: yap
+      url: "https://github.com/nzmacgeek/yap"
+      branch: "main"
     - name: matey
       url: "https://github.com/nzmacgeek/matey"
       branch: "main"
@@ -91,6 +94,8 @@ components:
   - name: dimsim
     enabled: true
   - name: claw
+    enabled: true
+  - name: yap
     enabled: true
   - name: matey
     enabled: true
