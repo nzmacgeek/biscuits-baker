@@ -80,6 +80,9 @@ network:
     - name: blueyos-archiving-tools
       url: "https://github.com/nzmacgeek/blueyos-archiving-tools"
       branch: "main"
+    - name: scout
+      url: "https://github.com/nzmacgeek/scout"
+      branch: "main"
   extra_repos: []
 
 # Components to include in the build (order matters for display; deps are resolved automatically)
@@ -109,6 +112,8 @@ components:
   - name: walkies
     enabled: true
   - name: blueyos-archiving-tools
+    enabled: true
+  - name: scout
     enabled: true
 
 # Components to explicitly exclude from the build
