@@ -67,6 +67,16 @@ DEFAULTS: Dict[str, Any] = {
         "size_mb": 64,
         "output": "output/blueyos.iso",
         "bootloader": "grub",
+        "swap_mb": 64,
+        "headroom_pct": 30,
+    },
+    "vm": {
+        "ram_mb": 512,
+        "cpus": 2,
+        "display": "none",
+        "kvm": "auto",
+        "snapshot": True,
+        "extra_args": [],
     },
 }
 
@@ -118,6 +128,18 @@ class ImageConfig:
     size_mb: int = 64
     output: str = "output/clawos.img"
     bootloader: str = "none"
+    swap_mb: int = 64
+    headroom_pct: int = 30
+
+
+@dataclass
+class VmConfig:
+    ram_mb: int = 512
+    cpus: int = 2
+    display: str = "none"          # none | gtk
+    kvm: str = "auto"              # auto | enabled | disabled
+    snapshot: bool = True          # use -snapshot (non-destructive boot)
+    extra_args: List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -139,6 +161,7 @@ class Config:
     components: List[ComponentEntry] = field(default_factory=list)
     exclude: List[str] = field(default_factory=list)
     image: ImageConfig = field(default_factory=ImageConfig)
+    vm: VmConfig = field(default_factory=VmConfig)
 
     # Resolved absolute paths (populated after load)
     abs_sysroot: str = ""
@@ -172,14 +195,16 @@ def _has_musl_layout(prefix: str) -> bool:
     """Return True when *prefix* looks like a usable musl install root.
 
     Supported layouts:
-    - <prefix>/include and <prefix>/lib/libc.a
-    - <prefix>/usr/include and <prefix>/usr/lib/libc.a
+    - <prefix>/bin/musl-gcc wrapper (most reliable indicator)
+    - <prefix>/lib/musl-gcc.specs
+    - <prefix>/include and <prefix>/lib/libc.a (standalone musl install)
     """
-    direct_include = os.path.isdir(os.path.join(prefix, "include"))
-    direct_libc = os.path.isfile(os.path.join(prefix, "lib", "libc.a"))
-    usr_include = os.path.isdir(os.path.join(prefix, "usr", "include"))
-    usr_libc = os.path.isfile(os.path.join(prefix, "usr", "lib", "libc.a"))
-    return (direct_include and direct_libc) or (usr_include and usr_libc)
+    if os.path.isfile(os.path.join(prefix, "bin", "musl-gcc")):
+        return True
+    if os.path.isfile(os.path.join(prefix, "lib", "musl-gcc.specs")):
+        return True
+    return (os.path.isdir(os.path.join(prefix, "include")) and
+            os.path.isfile(os.path.join(prefix, "lib", "libc.a")))
 
 
 def _resolve_path(base_dir: str, value: str) -> str:
@@ -262,6 +287,19 @@ def load_config(path: str = "baker.yaml") -> Config:
         size_mb=int(img.get("size_mb", 64)),
         output=img.get("output", "output/clawos.img"),
         bootloader=img.get("bootloader", "none"),
+        swap_mb=int(img.get("swap_mb", 64)),
+        headroom_pct=int(img.get("headroom_pct", 30)),
+    )
+
+    # --- vm ---
+    v = data.get("vm", {})
+    vm = VmConfig(
+        ram_mb=int(v.get("ram_mb", 512)),
+        cpus=int(v.get("cpus", 2)),
+        display=str(v.get("display", "none")),
+        kvm=str(v.get("kvm", "auto")),
+        snapshot=bool(v.get("snapshot", True)),
+        extra_args=[str(a) for a in v.get("extra_args", [])],
     )
 
     cfg = Config(
@@ -282,6 +320,7 @@ def load_config(path: str = "baker.yaml") -> Config:
         components=components,
         exclude=list(data.get("exclude", [])),
         image=image,
+        vm=vm,
     )
 
     # Resolve absolute paths relative to the config file's directory

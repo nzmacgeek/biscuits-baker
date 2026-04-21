@@ -59,15 +59,24 @@ class ImageStage(Stage):
         build_dir = os.path.join(src, "build")
         image_target = "disk" if fmt == "disk" else "iso"
         self.log.info("Delegating %s image build to biscuits", image_target)
-        self._run(
-            [
-                "make",
-                f"BUILD_DIR={build_dir}",
-                f"BLUEYOS_SYSROOT={cfg.abs_sysroot}",
-                image_target,
-            ],
-            cwd=src,
-        )
+
+        make_args = [
+            "make",
+            f"BUILD_DIR={build_dir}",
+            f"BLUEYOS_SYSROOT={cfg.abs_sysroot}",
+        ]
+        if image_target == "disk":
+            # Override ROOT_EXTRA_ARG to include disk sizing flags alongside the
+            # mandatory --root-extra-dir that the biscuits Makefile normally provides.
+            root_extra_arg = (
+                f"--root-extra-dir {cfg.abs_sysroot}"
+                f" --swap-mb={cfg.image.swap_mb}"
+                f" --root-buffer-pct={cfg.image.headroom_pct}"
+            )
+            make_args.append(f"ROOT_EXTRA_ARG={root_extra_arg}")
+        make_args.append(image_target)
+
+        self._run(make_args, cwd=src)
 
         if image_target == "disk":
             if shutil.which("mkfs.fat"):

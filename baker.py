@@ -11,6 +11,8 @@ Commands:
     build     Build all enabled components (or one component)
     package   Package built components into distributable archives
     image     Assemble a bootable filesystem image
+    vm        Boot the disk image in QEMU for interactive testing
+    extract   Extract diagnostic files from the disk image
     all       Run prepare → kernel → build → package → image in order
     clean     Remove build artifacts
 
@@ -38,6 +40,8 @@ from stages.toolchain import ToolchainStage
 from stages.build import BuildStage
 from stages.package import PackageStage
 from stages.image import ImageStage
+from stages.vm import VmStage
+from stages.extract import ExtractStage
 from stages.clean import CleanStage
 
 # ---------------------------------------------------------------------------
@@ -174,6 +178,75 @@ def build_parser() -> argparse.ArgumentParser:
         help="New root password (prompted interactively if omitted)",
     )
 
+    # vm
+    sub_vm = subparsers.add_parser(
+        "vm",
+        help="Boot the disk image in QEMU for interactive testing",
+    )
+    sub_vm.add_argument(
+        "--build",
+        action="store_true",
+        dest="vm_build",
+        help="Rebuild the disk image before launching",
+    )
+    sub_vm.add_argument(
+        "--no-snapshot",
+        action="store_true",
+        dest="vm_no_snapshot",
+        help="Disable snapshot mode (disk image will be modified by this run)",
+    )
+    sub_vm.add_argument(
+        "--ram",
+        type=int,
+        metavar="MB",
+        dest="vm_ram",
+        default=None,
+        help="RAM in megabytes (overrides vm.ram_mb in config)",
+    )
+    sub_vm.add_argument(
+        "--cpus",
+        type=int,
+        metavar="N",
+        dest="vm_cpus",
+        default=None,
+        help="Virtual CPU count (overrides vm.cpus in config)",
+    )
+    sub_vm.add_argument(
+        "--display",
+        choices=["none", "gtk"],
+        dest="vm_display",
+        default=None,
+        help="Display mode: none (headless serial) or gtk (graphical window)",
+    )
+
+    # extract
+    sub_extract = subparsers.add_parser(
+        "extract",
+        help="Extract diagnostic files from the disk image (e.g. /var/log, /etc)",
+    )
+    sub_extract.add_argument(
+        "--paths",
+        nargs="+",
+        metavar="PATH",
+        dest="extract_paths",
+        default=None,
+        help="Absolute paths to extract from the image (default: /var/log /etc)",
+    )
+    sub_extract.add_argument(
+        "--output",
+        metavar="DIR",
+        dest="extract_output",
+        default=None,
+        help="Output directory (default: output/extract-<timestamp>)",
+    )
+    sub_extract.add_argument(
+        "--image",
+        metavar="FILE",
+        dest="extract_image",
+        default=None,
+        help="Disk image to read (default: image.output from config)",
+    )
+
     # clean
     sub_clean = subparsers.add_parser(
         "clean",
@@ -217,6 +290,8 @@ def _register_all_stages(runner: StageRunner) -> None:
         BuildStage,
         PackageStage,
         ImageStage,
+        VmStage,
+        ExtractStage,
         CleanStage,
     )
 
@@ -305,6 +380,22 @@ def main(argv: list = None) -> int:
 
     elif command == "image":
         results = runner.run_stages(["image"])
+
+    elif command == "vm":
+        VmStage.build_image_first = getattr(args, "vm_build", False)
+        # --no-snapshot explicitly disables snapshot; otherwise None means "use config"
+        VmStage.snapshot_override = False if getattr(args, "vm_no_snapshot", False) else None
+        VmStage.ram_override = getattr(args, "vm_ram", None)
+        VmStage.cpus_override = getattr(args, "vm_cpus", None)
+        VmStage.display_override = getattr(args, "vm_display", None)
+        results = runner.run_stages(["vm"])
+
+    elif command == "extract":
+        from stages.extract import DEFAULT_PATHS
+        ExtractStage.paths = getattr(args, "extract_paths", None) or DEFAULT_PATHS
+        ExtractStage.output_dir = getattr(args, "extract_output", None)
+        ExtractStage.image_override = getattr(args, "extract_image", None)
+        results = runner.run_stages(["extract"])
 
     elif command == "all":
         results = runner.run_stages(ALL_STAGES)
