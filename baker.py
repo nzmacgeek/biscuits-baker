@@ -54,12 +54,22 @@ _LOG_LEVELS = {
 
 def setup_logging(level: str) -> None:
     numeric = _LOG_LEVELS.get(level.lower(), logging.INFO)
-    logging.basicConfig(
-        level=numeric,
-        format="%(asctime)s  %(levelname)-8s  %(name)s  %(message)s",
-        datefmt="%H:%M:%S",
-        stream=sys.stdout,
-    )
+    # Set root logger to DEBUG so per-recipe file handlers (also at DEBUG) can
+    # receive propagated records.  The StreamHandler level controls what the
+    # user actually sees on the console.
+    root = logging.getLogger()
+    root.setLevel(logging.DEBUG)
+    if not root.handlers:
+        handler = logging.StreamHandler(sys.stdout)
+        handler.setLevel(numeric)
+        handler.setFormatter(logging.Formatter(
+            "%(asctime)s  %(levelname)-8s  %(name)s  %(message)s",
+            datefmt="%H:%M:%S",
+        ))
+        root.addHandler(handler)
+    else:
+        for h in root.handlers:
+            h.setLevel(numeric)
 
 
 # ---------------------------------------------------------------------------

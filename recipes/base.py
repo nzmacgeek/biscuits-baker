@@ -74,6 +74,41 @@ class BaseRecipe(abc.ABC):
         self.sysroot = SysrootInstaller(config.abs_sysroot)
         self._source_dir = os.path.join(config.abs_sources_dir, self.name)
         self._build_dir = os.path.join(config.abs_build_dir, self.name)
+        self._log_file = self._setup_file_logging(config.abs_build_dir)
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _setup_file_logging(self, build_dir: str) -> str:
+        """Attach a DEBUG-level file handler to the recipe logger.
+
+        The log captures every subprocess invocation's stdout/stderr so build
+        failures can be diagnosed without re-running with --verbose.
+
+        Returns:
+            Absolute path to the log file.
+        """
+        logs_dir = os.path.join(build_dir, "logs")
+        os.makedirs(logs_dir, exist_ok=True)
+        log_path = os.path.join(logs_dir, f"{self.name}.log")
+
+        # Loggers are module-level singletons; remove stale file handlers
+        # accumulated across multiple recipe instantiations (common in tests).
+        for h in list(self.log.handlers):
+            if isinstance(h, logging.FileHandler):
+                h.close()
+                self.log.removeHandler(h)
+
+        handler = logging.FileHandler(log_path, mode="w", encoding="utf-8")
+        handler.setLevel(logging.DEBUG)
+        handler.setFormatter(logging.Formatter(
+            "%(asctime)s  %(levelname)-8s  %(message)s",
+            datefmt="%H:%M:%S",
+        ))
+        self.log.addHandler(handler)
+        self.log.setLevel(logging.DEBUG)
+        return log_path
 
     # ------------------------------------------------------------------
     # Template methods (override as needed)
@@ -172,7 +207,9 @@ class BaseRecipe(abc.ABC):
             self.log.debug(result.stderr.rstrip())
         if result.returncode != 0:
             raise RecipeError(
-                f"Command failed (exit {result.returncode}): {cmd_str}\n{result.stderr}"
+                f"Command failed (exit {result.returncode}): {cmd_str}\n"
+                f"Full output in: {self._log_file}\n"
+                f"{result.stderr}"
             )
 
     def ensure_build_dir(self) -> str:

@@ -42,6 +42,8 @@ class PackageStage(Stage):
                 continue
 
             self.log.info("Packaging: %s %s", recipe.name, recipe.version)
+            if hasattr(recipe, "_log_file"):
+                self.log.info("Package log: %s", recipe._log_file)
             try:
                 pkg_path = recipe.package()
                 if pkg_path:

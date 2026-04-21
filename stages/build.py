@@ -84,19 +84,26 @@ class BuildStage(Stage):
 
             self.log.info("-" * 50)
             self.log.info("Component: %s %s", recipe.name, recipe.version)
+            if hasattr(recipe, "_log_file"):
+                self.log.info("Build log:  %s", recipe._log_file)
             self.log.info("-" * 50)
 
             try:
                 self.log.info("[%s] fetch", name)
+                recipe.log.info("--- fetch ---")
                 recipe.fetch()
                 self.log.info("[%s] configure", name)
+                recipe.log.info("--- configure ---")
                 recipe.configure()
                 self.log.info("[%s] build", name)
+                recipe.log.info("--- build ---")
                 recipe.build()
                 self.log.info("[%s] install", name)
+                recipe.log.info("--- install ---")
                 recipe.install()
                 self.log.info("[%s] done", name)
             except Exception as exc:  # noqa: BLE001
+                recipe.log.error("FAILED: %s", exc)
                 self.log.error("[%s] FAILED: %s", name, exc)
                 failed.append(name)
 
