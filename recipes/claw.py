@@ -17,6 +17,9 @@ import subprocess
 from recipes.base import RecipeError
 from recipes._musl_package import MuslPackageRecipe
 
+# Automake installs config.sub here on Debian/Ubuntu systems.
+_AUTOMAKE_CONFIG_SUB_PATTERN = "/usr/share/automake*/config.sub"
+
 
 class ClawRecipe(MuslPackageRecipe):
     """claw — init / service manager for BlueyOS."""
@@ -43,7 +46,42 @@ class ClawRecipe(MuslPackageRecipe):
             self.log.info("Cleaning existing in-tree claw configure output from %s", src)
             self.run(["make", "distclean"], cwd=src)
 
+        self._ensure_musl_specs()
+        self._ensure_config_sub(src)
         self.ensure_build_dir()
+
+    def _ensure_config_sub(self, src: str) -> None:
+        """Ensure config.sub exists at the project root where build-standalone.sh looks.
+
+        build-standalone.sh validates HOST_TRIPLET via ``$PROJECT_ROOT/config.sub``
+        but the claw repo does not commit that file (autoreconf would put it in
+        build-aux/).  Without it the --host flag is silently dropped and configure
+        attempts to execute a cross-compiled binary, failing with "cannot run C
+        compiled programs".
+
+        This copies the system automake config.sub into the source tree as a
+        build-time convenience.  The proper long-term fix is to update
+        build-standalone.sh to look in build-aux/ (see source-tree notes).
+        """
+        dst = os.path.join(src, "config.sub")
+        if os.path.isfile(dst):
+            return
+
+        # Prefer build-aux/ if autoreconf has already been run.
+        src_candidate = os.path.join(src, "build-aux", "config.sub")
+        if not os.path.isfile(src_candidate):
+            candidates = sorted(glob.glob(_AUTOMAKE_CONFIG_SUB_PATTERN))
+            src_candidate = candidates[-1] if candidates else ""
+
+        if not src_candidate:
+            self.log.warning(
+                "config.sub not found; cross-compilation --host flag may be missing "
+                "and configure may fail"
+            )
+            return
+
+        shutil.copy2(src_candidate, dst)
+        self.log.info("Copied config.sub from %s to %s", src_candidate, dst)
 
     def _standalone_build_dir(self) -> str:
         return os.path.join(self._build_dir, "standalone-build")
