@@ -139,6 +139,7 @@ class ToolchainStage(Stage):
         self._repair_musl_wrapper(local_prefix)
         if os.path.isdir(musl_sysroot_dest):
             self._repair_musl_wrapper(musl_sysroot_dest)
+            self._ensure_musl_dynlinker(musl_sysroot_dest)
         if os.path.isdir(cross_musl_dest):
             self._repair_musl_wrapper(cross_musl_dest)
 
@@ -311,3 +312,7 @@ make MAKEINFO=true install-gcc install-target-libgcc
     def _repair_musl_wrapper(self, prefix: str) -> None:
         from helpers.musl import repair_musl_wrapper
         repair_musl_wrapper(prefix, self.log)
+
+    def _ensure_musl_dynlinker(self, sysroot: str) -> None:
+        from helpers.musl import ensure_musl_dynlinker
+        ensure_musl_dynlinker(sysroot, self.log)

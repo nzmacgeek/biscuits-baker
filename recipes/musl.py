@@ -22,7 +22,7 @@ class MuslRecipe(BaseRecipe):
         "usr/lib/libc.so",
         "usr/lib/libc.a",
         "usr/include",
-        "lib/ld-musl-x86_64.so.1",
+        "lib/ld-musl-i386.so.1",
     ]
 
     # Source URL (tarball fetched during prepare)

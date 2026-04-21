@@ -10,6 +10,7 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from helpers.musl import (
+    ensure_musl_dynlinker,
     ensure_musl_specs,
     generate_musl_specs,
     repair_musl_wrapper,
@@ -99,6 +100,12 @@ class TestGenerateMulSpecs:
         specs = generate_musl_specs("/inc", "/lib")
         assert "ld-musl-i386.so.1" in specs
 
+    def test_dynamic_linker_is_conditional_on_not_static(self):
+        specs = generate_musl_specs("/inc", "/lib")
+        # The dynamic linker must be guarded so -static binaries are not
+        # linked against it.  Without this guard musl-gcc ignores -static.
+        assert "%{!static:-dynamic-linker /lib/ld-musl-i386.so.1}" in specs
+
     def test_renames_cpp_options(self):
         specs = generate_musl_specs("/inc", "/lib")
         assert "%rename cpp_options old_cpp_options" in specs
@@ -114,13 +121,25 @@ class TestGenerateMulSpecs:
 
 
 class TestEnsureMulSpecs:
-    def test_no_op_when_specs_already_present(self, tmp_path):
+    def test_no_op_when_specs_already_up_to_date(self, tmp_path):
+        """An up-to-date specs file (with %{!static:}) is left unchanged."""
         _make_musl_layout(tmp_path, "usr/lib")
         specs_path = tmp_path / "lib" / "musl-gcc.specs"
         specs_path.parent.mkdir(parents=True, exist_ok=True)
-        specs_path.write_text("# existing\n")
+        good_content = "*link:\n-m elf_i386 %{!static:-dynamic-linker /lib/ld-musl-i386.so.1}\n"
+        specs_path.write_text(good_content)
         assert ensure_musl_specs(str(tmp_path)) is True
-        assert specs_path.read_text() == "# existing\n"
+        assert specs_path.read_text() == good_content
+
+    def test_migrates_stale_specs_missing_static_guard(self, tmp_path):
+        """Stale specs without %{!static:} are detected and regenerated."""
+        _make_musl_layout(tmp_path, "usr/lib")
+        specs_path = tmp_path / "lib" / "musl-gcc.specs"
+        specs_path.parent.mkdir(parents=True, exist_ok=True)
+        specs_path.write_text("*link:\n-m elf_i386 -dynamic-linker /lib/ld-musl-i386.so.1\n")
+        assert ensure_musl_specs(str(tmp_path)) is True
+        new_content = specs_path.read_text()
+        assert "%{!static:" in new_content
 
     def test_generates_when_missing(self, tmp_path):
         _make_musl_layout(tmp_path, "usr/lib")
@@ -243,3 +262,75 @@ class TestRepairMulWrapper:
         assert "i686-linux-gnu-gcc" in wrapper_content
         # Plain gcc should NOT appear in the exec line when cross-compiler is found
         assert "/usr/bin/gcc" not in wrapper_content
+
+
+class TestEnsureMuslDynlinker:
+    def _make_usr_lib(self, root):
+        usr_lib = root / "usr" / "lib"
+        usr_lib.mkdir(parents=True, exist_ok=True)
+        (usr_lib / "libc.so").write_bytes(b"\x7fELF")
+        return usr_lib
+
+    def test_creates_symlink_when_absent(self, tmp_path):
+        self._make_usr_lib(tmp_path)
+        result = ensure_musl_dynlinker(str(tmp_path))
+        assert result is True
+        dynlinker = tmp_path / "lib" / "ld-musl-i386.so.1"
+        assert dynlinker.is_symlink()
+        assert os.readlink(str(dynlinker)) == "../usr/lib/libc.so"
+
+    def test_no_op_when_symlink_already_correct(self, tmp_path):
+        self._make_usr_lib(tmp_path)
+        lib_dir = tmp_path / "lib"
+        lib_dir.mkdir(parents=True, exist_ok=True)
+        dynlinker = lib_dir / "ld-musl-i386.so.1"
+        dynlinker.symlink_to("../usr/lib/libc.so")
+        result = ensure_musl_dynlinker(str(tmp_path))
+        assert result is True
+        assert os.readlink(str(dynlinker)) == "../usr/lib/libc.so"
+
+    def test_repairs_dangling_symlink(self, tmp_path):
+        self._make_usr_lib(tmp_path)
+        lib_dir = tmp_path / "lib"
+        lib_dir.mkdir(parents=True, exist_ok=True)
+        dynlinker = lib_dir / "ld-musl-i386.so.1"
+        dynlinker.symlink_to("/nonexistent/path")
+        result = ensure_musl_dynlinker(str(tmp_path))
+        assert result is True
+        assert os.readlink(str(dynlinker)) == "../usr/lib/libc.so"
+
+    def test_repairs_wrong_target_symlink(self, tmp_path):
+        usr_lib = self._make_usr_lib(tmp_path)
+        (usr_lib / "other.so").write_bytes(b"\x7fELF")
+        lib_dir = tmp_path / "lib"
+        lib_dir.mkdir(parents=True, exist_ok=True)
+        dynlinker = lib_dir / "ld-musl-i386.so.1"
+        dynlinker.symlink_to("../usr/lib/other.so")
+        result = ensure_musl_dynlinker(str(tmp_path))
+        assert result is True
+        assert os.readlink(str(dynlinker)) == "../usr/lib/libc.so"
+
+    def test_leaves_regular_file_untouched(self, tmp_path):
+        self._make_usr_lib(tmp_path)
+        lib_dir = tmp_path / "lib"
+        lib_dir.mkdir(parents=True, exist_ok=True)
+        dynlinker = lib_dir / "ld-musl-i386.so.1"
+        dynlinker.write_bytes(b"\x7fELF")
+        result = ensure_musl_dynlinker(str(tmp_path))
+        assert result is True
+        assert not dynlinker.is_symlink()
+
+    def test_returns_false_when_libc_so_absent(self, tmp_path):
+        (tmp_path / "usr" / "lib").mkdir(parents=True)
+        result = ensure_musl_dynlinker(str(tmp_path))
+        assert result is False
+        assert not (tmp_path / "lib" / "ld-musl-i386.so.1").exists()
+
+    def test_accepts_ld_musl_i386_so1_as_target(self, tmp_path):
+        usr_lib = tmp_path / "usr" / "lib"
+        usr_lib.mkdir(parents=True, exist_ok=True)
+        (usr_lib / "ld-musl-i386.so.1").write_bytes(b"\x7fELF")
+        result = ensure_musl_dynlinker(str(tmp_path))
+        assert result is True
+        dynlinker = tmp_path / "lib" / "ld-musl-i386.so.1"
+        assert dynlinker.is_symlink()
