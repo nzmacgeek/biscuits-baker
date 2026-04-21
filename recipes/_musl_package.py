@@ -31,13 +31,29 @@ class MuslPackageRecipe(BaseRecipe):
         super().__init__(config)
         self._source_dir = os.path.join(config.abs_sources_dir, self.name)
 
+    def _ensure_musl_specs(self) -> bool:
+        """Ensure musl-gcc.specs exists for the resolved musl prefix.
+
+        Generates the file from the detected sysroot layout when it is
+        missing.  Called before any configure step that invokes the
+        musl-gcc compiler wrapper so that the CC probe succeeds.
+
+        Returns True when specs are present (pre-existing or freshly generated).
+        """
+        from helpers.musl import ensure_musl_specs
+        return ensure_musl_specs(self._resolve_musl_make_prefix(), self.log)
+
     def _resolve_musl_make_prefix(self) -> str:
         """Return MUSL_PREFIX path with include/lib expected by package Makefiles.
 
         Some environments provide a sysroot layout (<prefix>/usr/include, <prefix>/usr/lib),
         while others provide a direct musl prefix (<prefix>/include, <prefix>/lib).
+        Prefer the root when it contains a musl-gcc wrapper, since that indicates the
+        musl tools live there rather than in a usr/ subtree shared with another libc.
         """
         base = self.config.abs_musl_prefix
+        if os.path.isfile(os.path.join(base, "bin", "musl-gcc")):
+            return base
         candidates = [base, os.path.join(base, "usr")]
         for candidate in candidates:
             include_dir = os.path.join(candidate, "include")

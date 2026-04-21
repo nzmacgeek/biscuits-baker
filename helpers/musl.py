@@ -1,0 +1,189 @@
+"""helpers/musl.py - Musl toolchain helpers.
+
+Provides utilities to detect the musl library layout, generate a
+musl-gcc.specs file, and repair the musl-gcc compiler wrapper.
+
+The musl-gcc wrapper installed into the sysroot by the toolchain stage
+requires a musl-gcc.specs file alongside it.  When that file is missing
+(e.g. the sysroot was installed from a pre-built tarball that omitted it,
+or the toolchain stage was skipped), any configure step that probes the C
+compiler will fail with "C compiler cannot create executables".
+
+These helpers are used from both the toolchain stage (repair on install)
+and from individual recipes (repair on demand, before configure).
+"""
+
+from __future__ import annotations
+
+import logging
+import os
+import shlex
+import shutil
+from typing import Optional
+
+logger = logging.getLogger(__name__)
+
+
+def resolve_musl_lib_dir(prefix: str) -> Optional[str]:
+    """Return the directory containing musl's libc.a and CRT objects.
+
+    Checks ``<prefix>/usr/lib`` first (FHS-style sysroot layout where musl
+    lives under a usr subtree), then ``<prefix>/lib`` (direct musl install).
+    Both ``libc.a`` and ``crt1.o`` must be present in the candidate directory.
+    """
+    for candidate in [
+        os.path.join(prefix, "usr", "lib"),
+        os.path.join(prefix, "lib"),
+    ]:
+        if os.path.isfile(os.path.join(candidate, "libc.a")) and os.path.isfile(
+            os.path.join(candidate, "crt1.o")
+        ):
+            return candidate
+    return None
+
+
+def resolve_musl_include_dir(prefix: str) -> Optional[str]:
+    """Return the musl include directory within *prefix*, or None if absent."""
+    include_dir = os.path.join(prefix, "include")
+    if os.path.isdir(include_dir):
+        return include_dir
+    return None
+
+
+def generate_musl_specs(include_dir: str, lib_dir: str) -> str:
+    """Return the content of a musl-gcc.specs file.
+
+    The generated specs follow the format produced by musl's own Makefile.
+    They instruct GCC to use musl headers and libraries instead of the system
+    ones, targeting i386 with the musl dynamic linker.
+
+    Args:
+        include_dir: Absolute path to the musl include directory.
+        lib_dir: Absolute path to the directory containing libc.a and CRT files.
+    """
+    return (
+        "%rename cpp_options old_cpp_options\n\n"
+        "*cpp_options:\n"
+        f"-nostdinc -isystem {include_dir} %(old_cpp_options)\n\n"
+        "*cc1:\n"
+        f"%(cc1_cpu) -nostdinc -isystem {include_dir}\n\n"
+        "*link_libgcc:\n"
+        f"-L{lib_dir} -L.\n\n"
+        "*libgcc:\n"
+        "libgcc.a%s %:if-exists(libgcc_eh.a%s) %:if-exists(libssp_nonshared.a%s)\n\n"
+        "*startfile:\n"
+        f"%{{!shared:{lib_dir}/crt1.o}} {lib_dir}/crti.o\n\n"
+        "*endfile:\n"
+        f"{lib_dir}/crtn.o\n\n"
+        "*link:\n"
+        "-m elf_i386 -dynamic-linker /lib/ld-musl-i386.so.1\n"
+    )
+
+
+def ensure_musl_specs(
+    prefix: str, log: Optional[logging.Logger] = None
+) -> bool:
+    """Ensure ``<prefix>/lib/musl-gcc.specs`` exists.
+
+    If the file is already present, returns True immediately.  Otherwise
+    attempts to generate it from the detected musl layout within *prefix*.
+
+    Returns:
+        True  — specs were already present or were successfully written.
+        False — specs could not be created (incomplete layout or not writable).
+    """
+    log = log or logger
+    specs_path = os.path.join(prefix, "lib", "musl-gcc.specs")
+
+    if os.path.isfile(specs_path):
+        return True
+
+    include_dir = resolve_musl_include_dir(prefix)
+    lib_dir = resolve_musl_lib_dir(prefix)
+
+    if include_dir is None or lib_dir is None:
+        log.debug(
+            "Cannot generate musl-gcc.specs at %s: incomplete musl layout "
+            "(include_dir=%s, lib_dir=%s)",
+            specs_path,
+            include_dir,
+            lib_dir,
+        )
+        return False
+
+    try:
+        os.makedirs(os.path.dirname(specs_path), exist_ok=True)
+        with open(specs_path, "w", encoding="utf-8") as fh:
+            fh.write(generate_musl_specs(include_dir, lib_dir))
+        log.info("Generated musl-gcc.specs at %s", specs_path)
+        return True
+    except OSError as exc:
+        log.warning("Could not write musl-gcc.specs to %s: %s", specs_path, exc)
+        return False
+
+
+def repair_musl_wrapper(
+    prefix: str, log: Optional[logging.Logger] = None
+) -> None:
+    """Repair the musl-gcc wrapper at ``<prefix>/bin/musl-gcc``.
+
+    Generates ``musl-gcc.specs`` when it is missing, then rewrites the
+    wrapper script to call the correct host gcc with those specs.  Uses the
+    resolved lib directory (``usr/lib`` or ``lib``) consistently for both
+    the specs paths and the ``-print-file-name`` lookup inside the wrapper.
+
+    No-ops when the wrapper does not exist, the musl layout cannot be
+    detected, or no suitable host gcc is available.
+    """
+    log = log or logger
+    wrapper_path = os.path.join(prefix, "bin", "musl-gcc")
+    specs_path = os.path.join(prefix, "lib", "musl-gcc.specs")
+
+    if not os.path.isfile(wrapper_path):
+        return
+
+    if not os.path.isfile(specs_path):
+        if not ensure_musl_specs(prefix, log):
+            log.debug(
+                "Skipping wrapper repair: cannot generate specs for %s", prefix
+            )
+            return
+
+    distro_cross = shutil.which("i686-linux-gnu-gcc")
+    if distro_cross:
+        compiler_cmd = [distro_cross, "-m32"]
+    else:
+        host_gcc = shutil.which("gcc")
+        if host_gcc:
+            compiler_cmd = [host_gcc, "-m32"]
+        else:
+            log.debug("No host gcc found; skipping wrapper repair for %s", prefix)
+            return
+
+    # Use the same lib dir that the specs point to for -print-file-name lookups
+    lib_dir = resolve_musl_lib_dir(prefix) or os.path.join(prefix, "lib")
+    parts = " ".join(shlex.quote(part) for part in compiler_cmd)
+
+    script = (
+        "#!/bin/sh\n"
+        'case "$1" in\n'
+        "  -print-file-name=*)\n"
+        "    requested=${1#-print-file-name=}\n"
+        f"    if [ -f {shlex.quote(lib_dir)}/\"$requested\" ]; then\n"
+        f"      printf '%s\\n' {shlex.quote(lib_dir)}/\"$requested\"\n"
+        "      exit 0\n"
+        "    fi\n"
+        "    ;;\n"
+        "esac\n"
+        f'exec {parts} -specs {shlex.quote(specs_path)} "$@"\n'
+    )
+
+    try:
+        with open(wrapper_path, "w", encoding="utf-8") as fh:
+            fh.write(script)
+        os.chmod(wrapper_path, 0o755)
+        log.info("Repaired musl-gcc wrapper at %s", wrapper_path)
+    except OSError as exc:
+        log.warning(
+            "Could not repair musl-gcc wrapper at %s: %s", wrapper_path, exc
+        )

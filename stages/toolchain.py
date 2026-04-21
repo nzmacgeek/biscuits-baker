@@ -22,7 +22,6 @@ is fast because they skip already-installed artefacts.
 from __future__ import annotations
 
 import os
-import shlex
 import shutil
 import subprocess
 import tempfile
@@ -310,37 +309,5 @@ make MAKEINFO=true install-gcc install-target-libgcc
                 os.symlink(source_gcc_root, compat_gcc_root)
 
     def _repair_musl_wrapper(self, prefix: str) -> None:
-        wrapper_path = os.path.join(prefix, "bin", "musl-gcc")
-        specs_path = os.path.join(prefix, "lib", "musl-gcc.specs")
-        if not (os.path.isfile(wrapper_path) and os.path.isfile(specs_path)):
-            return
-
-        compiler_cmd: list[str] | None = None
-        distro_cross = shutil.which("i686-linux-gnu-gcc")
-        if distro_cross:
-            compiler_cmd = [distro_cross, "-m32"]
-        else:
-            host_gcc = shutil.which("gcc")
-            if host_gcc:
-                compiler_cmd = [host_gcc, "-m32"]
-
-        if not compiler_cmd:
-            return
-
-        parts = " ".join(shlex.quote(part) for part in compiler_cmd)
-        script = (
-            "#!/bin/sh\n"
-            "case \"$1\" in\n"
-            "  -print-file-name=*)\n"
-            "    requested=${1#-print-file-name=}\n"
-            f"    if [ -f {shlex.quote(os.path.join(prefix, 'lib'))}/\"$requested\" ]; then\n"
-            f"      printf '%s\\n' {shlex.quote(os.path.join(prefix, 'lib'))}/\"$requested\"\n"
-            "      exit 0\n"
-            "    fi\n"
-            "    ;;\n"
-            "esac\n"
-            f'exec {parts} -specs {shlex.quote(specs_path)} "$@"\n'
-        )
-        with open(wrapper_path, "w", encoding="utf-8") as fh:
-            fh.write(script)
-        os.chmod(wrapper_path, 0o755)
+        from helpers.musl import repair_musl_wrapper
+        repair_musl_wrapper(prefix, self.log)

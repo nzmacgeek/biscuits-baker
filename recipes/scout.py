@@ -59,6 +59,7 @@ class ScoutRecipe(MuslPackageRecipe):
         build_dir = self.ensure_build_dir()
         musl_prefix = self._resolve_musl_make_prefix()
 
+        self._ensure_musl_specs()
         self.log.info("Configuring scout with musl prefix %s", musl_prefix)
 
         configure_blueyos = os.path.join(src, "tools", "configure-blueyos.sh")
