@@ -1,0 +1,145 @@
+name: Build Golden Master
+
+on:
+  schedule:
+    - cron: '0 0 * * 0'
+  workflow_dispatch:
+    inputs:
+      publish_release:
+        description: Publish this run as a golden master release candidate
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: golden-master-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Make CI scripts executable
+        run: chmod +x scripts/ci/*.sh
+
+      - name: Install host dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y \
+            git make gcc gcc-multilib binutils nasm \
+            python3 python3-pip \
+            go golang-go \
+            zic wget curl \
+            grub-pc-bin xorriso
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Cache build tree
+        uses: actions/cache@v4
+        with:
+          path: |
+            build/toolchains
+            build/musl
+            src
+          key: golden-master-${{ runner.os }}-${{ hashFiles('baker.yaml', 'requirements.txt') }}
+          restore-keys: |
+            golden-master-${{ runner.os }}-
+
+      - name: Install Python dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Determine release intent
+        id: intent
+        run: |
+          set -euo pipefail
+          release_intent=false
+          if [[ "${{ github.event_name }}" == "schedule" ]]; then
+            release_intent=true
+          elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            release_intent="${{ github.event.inputs.publish_release }}"
+          fi
+          echo "release_intent=$release_intent" >> "$GITHUB_OUTPUT"
+          echo "release_intent=$release_intent"
+
+      - name: Compute build number
+        id: buildnum
+        if: steps.intent.outputs.release_intent == 'true'
+        run: scripts/ci/bump_build_number.sh
+
+      - name: Set build metadata defaults
+        id: defaults
+        run: |
+          set -euo pipefail
+          if [[ "${{ steps.intent.outputs.release_intent }}" == "true" ]]; then
+            bn="${{ steps.buildnum.outputs.build_number }}"
+            tag="${{ steps.buildnum.outputs.release_tag }}"
+          else
+            bn="0"
+            tag="dryrun-${GITHUB_RUN_ID}"
+          fi
+          echo "build_number=$bn" >> "$GITHUB_OUTPUT"
+          echo "release_tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Run pipeline stages
+        env:
+          BUILD_NUMBER: ${{ steps.defaults.outputs.build_number }}
+          RELEASE_INTENT: ${{ steps.intent.outputs.release_intent }}
+        run: |
+          set -euo pipefail
+          mkdir -p build/logs
+
+          python baker.py --verbose prepare 2>&1 | tee build/logs/prepare.log
+
+          if [[ "$RELEASE_INTENT" == "true" ]]; then
+            scripts/ci/update_dimsim_manifest_version.sh "$BUILD_NUMBER" 2>&1 | tee build/logs/versioning.log
+          fi
+
+          python baker.py --verbose kernel 2>&1 | tee build/logs/kernel.log
+          python baker.py --verbose toolchain 2>&1 | tee build/logs/toolchain.log
+          python baker.py --verbose build 2>&1 | tee build/logs/build.log
+          python baker.py --verbose package 2>&1 | tee build/logs/package.log
+          python baker.py --verbose image 2>&1 | tee build/logs/image.log
+
+      - name: Collect release bundle
+        id: bundle
+        env:
+          BUILD_NUMBER: ${{ steps.defaults.outputs.build_number }}
+          RELEASE_INTENT: ${{ steps.intent.outputs.release_intent }}
+        run: scripts/ci/collect_golden_master_assets.sh "$BUILD_NUMBER" "$RELEASE_INTENT"
+
+      - name: Upload bundle artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: golden-master-bundle
+          path: ${{ steps.bundle.outputs.bundle_root }}
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Build summary
+        run: |
+          {
+            echo "## Golden Master Build Summary"
+            echo ""
+            echo "- Release intent: ${{ steps.intent.outputs.release_intent }}"
+            echo "- Build number: ${{ steps.defaults.outputs.build_number }}"
+            echo "- Release tag: ${{ steps.bundle.outputs.release_tag }}"
+            echo "- Bundle path: ${{ steps.bundle.outputs.bundle_root }}"
+          } >> "$GITHUB_STEP_SUMMARY"

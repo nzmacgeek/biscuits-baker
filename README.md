@@ -467,3 +467,34 @@ python -m pytest tests/ -v
 
 No network access or build tools are required to run the test suite — all tests use
 temporary directories and mock data.
+
+---
+
+## Golden master automation
+
+This repository includes GitHub Actions workflows for regular full builds and immutable
+release publication:
+
+- `.github/workflows/build-golden-master.yml`
+  - Runs weekly on Sunday 00:00 UTC.
+  - Supports manual runs via `workflow_dispatch`.
+  - Executes the full Baker pipeline stages.
+  - Produces a `golden-master-bundle` artifact containing release assets, checksums,
+    logs, and build metadata.
+- `.github/workflows/publish-golden-master.yml`
+  - Triggers after successful `Build Golden Master` runs or by manual dispatch with a
+    run ID.
+  - Publishes immutable GitHub Releases for release-intent runs on `main`.
+  - Uploads disk images, `.dpk` package assets, and `SHA256SUMS`.
+
+### Build number and dimsim versioning in CI
+
+For release-intent full builds, CI computes the next build number from existing
+`gm-*-buildN` tags and uses it for the release tag. It also attempts to update the
+dimsim package manifest version to include `+<build-number>` before packaging.
+
+Helper scripts used by workflows:
+
+- `scripts/ci/bump_build_number.sh`
+- `scripts/ci/update_dimsim_manifest_version.sh`
+- `scripts/ci/collect_golden_master_assets.sh`

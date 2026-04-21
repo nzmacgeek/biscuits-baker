@@ -1,0 +1,133 @@
+name: Publish Golden Master Release
+
+on:
+  workflow_run:
+    workflows:
+      - Build Golden Master
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Actions run ID from Build Golden Master
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: write
+
+concurrency:
+  group: golden-master-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+
+    steps:
+      - name: Resolve source run
+        id: run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
+            run_id="${{ github.event.workflow_run.id }}"
+          else
+            run_id="${{ github.event.inputs.run_id }}"
+          fi
+
+          branch="$(gh api repos/${{ github.repository }}/actions/runs/${run_id} --jq '.head_branch')"
+          conclusion="$(gh api repos/${{ github.repository }}/actions/runs/${run_id} --jq '.conclusion')"
+
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+          echo "conclusion=$conclusion" >> "$GITHUB_OUTPUT"
+
+      - name: Enforce source run policy
+        id: policy
+        run: |
+          set -euo pipefail
+          should_publish=true
+          if [[ "${{ steps.run.outputs.branch }}" != "main" ]]; then
+            should_publish=false
+            echo "Source run is from branch ${{ steps.run.outputs.branch }}; skipping release publication." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [[ "${{ steps.run.outputs.conclusion }}" != "success" ]]; then
+            should_publish=false
+            echo "Source run conclusion is ${{ steps.run.outputs.conclusion }}; skipping release publication." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "should_publish=$should_publish" >> "$GITHUB_OUTPUT"
+
+      - name: Download golden master bundle
+        if: steps.policy.outputs.should_publish == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: golden-master-bundle
+          path: dist/golden-master
+          github-token: ${{ github.token }}
+          run-id: ${{ steps.run.outputs.run_id }}
+
+      - name: Load metadata
+        id: meta
+        if: steps.policy.outputs.should_publish == 'true'
+        run: |
+          set -euo pipefail
+
+          metadata_env="dist/golden-master/metadata/build-metadata.env"
+          if [[ ! -f "$metadata_env" ]]; then
+            echo "Missing metadata file: $metadata_env" >&2
+            exit 1
+          fi
+
+          # shellcheck disable=SC1090
+          source "$metadata_env"
+
+          echo "build_number=$BUILD_NUMBER" >> "$GITHUB_OUTPUT"
+          echo "release_intent=$RELEASE_INTENT" >> "$GITHUB_OUTPUT"
+          echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+          echo "commit_sha=$COMMIT_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Gate on release intent
+        if: steps.policy.outputs.should_publish == 'true' && steps.meta.outputs.release_intent != 'true'
+        run: |
+          echo "Build was not marked as release-intent; skipping publish." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Ensure release tag does not already exist
+        if: steps.policy.outputs.should_publish == 'true' && steps.meta.outputs.release_intent == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh release view "${{ steps.meta.outputs.release_tag }}" >/dev/null 2>&1; then
+            echo "Release tag already exists: ${{ steps.meta.outputs.release_tag }}" >&2
+            exit 1
+          fi
+
+      - name: Publish GitHub release
+        if: steps.policy.outputs.should_publish == 'true' && steps.meta.outputs.release_intent == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.release_tag }}
+          target_commitish: ${{ steps.meta.outputs.commit_sha }}
+          name: Golden Master Build ${{ steps.meta.outputs.build_number }}
+          body_path: dist/golden-master/metadata/release-notes.md
+          files: |
+            dist/golden-master/assets/*
+            dist/golden-master/metadata/SHA256SUMS
+
+      - name: Publish summary
+        if: steps.policy.outputs.should_publish == 'true' && steps.meta.outputs.release_intent == 'true'
+        run: |
+          {
+            echo "## Golden Master Release Published"
+            echo ""
+            echo "- Run ID: ${{ steps.run.outputs.run_id }}"
+            echo "- Build number: ${{ steps.meta.outputs.build_number }}"
+            echo "- Release tag: ${{ steps.meta.outputs.release_tag }}"
+            echo "- Commit: ${{ steps.meta.outputs.commit_sha }}"
+          } >> "$GITHUB_STEP_SUMMARY"
