@@ -90,12 +90,12 @@ class ClawRecipe(MuslPackageRecipe):
         return os.path.join(self._build_dir, "sysroot-staging")
 
     def _standalone_env(self) -> dict[str, str]:
-        musl_prefix = self._resolve_musl_make_prefix()
-        env = {"MUSL_PREFIX": musl_prefix}
+        musl_sysroot = self._resolve_musl_sysroot()
+        env = {"MUSL_PREFIX": musl_sysroot}
 
         # musl-gcc generates target-arch binaries that cannot run on the build host.
         # Detect the triplet so build-standalone.sh passes --host to configure.
-        musl_gcc = os.path.join(musl_prefix, "bin", "musl-gcc")
+        musl_gcc = os.path.join(musl_sysroot, "bin", "musl-gcc")
         if os.path.isfile(musl_gcc) and os.access(musl_gcc, os.X_OK):
             try:
                 triplet = subprocess.check_output(

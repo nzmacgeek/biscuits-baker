@@ -32,7 +32,7 @@ class MuslPackageRecipe(BaseRecipe):
         self._source_dir = os.path.join(config.abs_sources_dir, self.name)
 
     def _ensure_musl_specs(self) -> bool:
-        """Ensure musl-gcc.specs exists for the resolved musl prefix.
+        """Ensure musl-gcc.specs exists for the resolved musl sysroot.
 
         Generates the file from the detected sysroot layout when it is
         missing.  Called before any configure step that invokes the
@@ -41,21 +41,41 @@ class MuslPackageRecipe(BaseRecipe):
         Returns True when specs are present (pre-existing or freshly generated).
         """
         from helpers.musl import ensure_musl_specs
-        return ensure_musl_specs(self._resolve_musl_make_prefix(), self.log)
+        return ensure_musl_specs(self._resolve_musl_sysroot(), self.log)
 
-    def _resolve_musl_make_prefix(self) -> str:
-        """Return MUSL_PREFIX path with include/lib expected by package Makefiles.
+    def _resolve_musl_sysroot(self) -> str:
+        """Return the sysroot root that contains the musl-gcc wrapper.
 
-        Some environments provide a sysroot layout (<prefix>/usr/include, <prefix>/usr/lib),
-        while others provide a direct musl prefix (<prefix>/include, <prefix>/lib).
-        Prefer the root when it contains a musl-gcc wrapper, since that indicates the
-        musl tools live there rather than in a usr/ subtree shared with another libc.
+        Used by configure-script-based builds (scout, claw) that need the
+        prefix root where ``bin/musl-gcc`` lives.  Searches ``base`` first,
+        then ``base/usr``, falling back to ``base`` when neither contains the
+        wrapper.
         """
         base = self.config.abs_musl_prefix
-        if os.path.isfile(os.path.join(base, "bin", "musl-gcc")):
-            return base
-        candidates = [base, os.path.join(base, "usr")]
-        for candidate in candidates:
+        for candidate in [base, os.path.join(base, "usr")]:
+            if os.path.isfile(os.path.join(candidate, "bin", "musl-gcc")):
+                return candidate
+        return base
+
+    def _resolve_musl_make_prefix(self) -> str:
+        """Return MUSL_PREFIX where ``include/`` and ``lib/libc.a`` are co-located.
+
+        Package Makefiles (matey, yap, ...) derive paths as::
+
+            MUSL_INCLUDE = $(MUSL_PREFIX)/include
+            MUSL_LIB     = $(MUSL_PREFIX)/lib
+
+        so the returned prefix must have musl headers directly under
+        ``include/`` *and* ``libc.a`` directly under ``lib/``.  On hybrid
+        sysroots (e.g. ``/opt/blueyos-sysroot``) the headers live at the
+        root but ``libc.a`` is nested under ``usr/lib/`` -- in that case
+        ``base/usr`` satisfies both requirements.
+
+        Searches ``base`` then ``base/usr``; falls back to ``base`` for
+        non-standard layouts.
+        """
+        base = self.config.abs_musl_prefix
+        for candidate in [base, os.path.join(base, "usr")]:
             include_dir = os.path.join(candidate, "include")
             libc_a = os.path.join(candidate, "lib", "libc.a")
             if os.path.isdir(include_dir) and os.path.isfile(libc_a):

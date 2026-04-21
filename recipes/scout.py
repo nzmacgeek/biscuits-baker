@@ -57,10 +57,10 @@ class ScoutRecipe(MuslPackageRecipe):
             raise RecipeError(f"configure script not found in {src}")
 
         build_dir = self.ensure_build_dir()
-        musl_prefix = self._resolve_musl_make_prefix()
+        musl_sysroot = self._resolve_musl_sysroot()
 
         self._ensure_musl_specs()
-        self.log.info("Configuring scout with musl prefix %s", musl_prefix)
+        self.log.info("Configuring scout with musl prefix %s", musl_sysroot)
 
         configure_blueyos = os.path.join(src, "tools", "configure-blueyos.sh")
         if os.path.isfile(configure_blueyos):
@@ -69,7 +69,7 @@ class ScoutRecipe(MuslPackageRecipe):
                     "bash",
                     configure_blueyos,
                     "--libc=musl",
-                    f"--sysroot={musl_prefix}",
+                    f"--sysroot={musl_sysroot}",
                     f"--build-dir={build_dir}",
                 ],
                 cwd=src,
@@ -82,7 +82,7 @@ class ScoutRecipe(MuslPackageRecipe):
                     "--sysconfdir=/etc",
                     "--localstatedir=/var",
                     "--with-libc=musl",
-                    f"--with-blueyos-sysroot={musl_prefix}",
+                    f"--with-blueyos-sysroot={musl_sysroot}",
                     "--enable-blueyos-netctl",
                 ],
                 cwd=build_dir,
