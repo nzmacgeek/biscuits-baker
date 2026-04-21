@@ -7,6 +7,7 @@ image is opened in snapshot mode so the on-disk image is never modified.
 Usage:
     baker vm                  # launch with config defaults
     baker vm --build          # rebuild image then launch
+    baker vm --fresh          # clean sysroot, rebuild all components + image, then launch
     baker vm --no-snapshot    # persistent boot (image is written to)
     baker vm --display gtk    # graphical window instead of serial console
 """
@@ -38,6 +39,7 @@ class VmStage(Stage):
 
     # Set by baker.py before run() is called
     build_image_first: bool = False
+    fresh_build: bool = False          # clean sysroot+output, rebuild all, rebuild image
     snapshot_override: bool | None = None   # None = use cfg.vm.snapshot
     ram_override: int | None = None
     cpus_override: int | None = None
@@ -52,7 +54,9 @@ class VmStage(Stage):
                 "Install qemu-system-x86 (or qemu-system-i386) to use 'baker vm'."
             )
 
-        if self.build_image_first:
+        if self.fresh_build:
+            self._fresh_rebuild(cfg)
+        elif self.build_image_first:
             from stages.image import ImageStage
             image_stage = ImageStage(cfg)
             image_stage.run()
@@ -85,6 +89,28 @@ class VmStage(Stage):
         if result.returncode not in (0, 1):
             # QEMU exits 1 on normal shutdown; anything else is an error
             raise RuntimeError(f"QEMU exited with code {result.returncode}")
+
+    def _fresh_rebuild(self, cfg) -> None:
+        """Wipe sysroot + output, rebuild all components, rebuild the disk image."""
+        import shutil as _shutil
+
+        for path, label in [
+            (cfg.abs_sysroot, "sysroot"),
+            (cfg.abs_output_dir, "output"),
+        ]:
+            if os.path.isdir(path):
+                self.log.info("Cleaning %s: %s", label, path)
+                _shutil.rmtree(path)
+
+        self.log.info("Rebuilding all components...")
+        from stages.build import BuildStage
+        build_stage = BuildStage(cfg)
+        build_stage.run()
+
+        self.log.info("Rebuilding disk image...")
+        from stages.image import ImageStage
+        image_stage = ImageStage(cfg)
+        image_stage.run()
 
     def _build_qemu_cmd(self, cfg, image_path: str, ram_mb: int, cpus: int,
                         display: str, snapshot: bool) -> list[str]:

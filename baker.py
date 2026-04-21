@@ -15,6 +15,8 @@ Commands:
     extract   Extract diagnostic files from the disk image
     all       Run prepare → kernel → build → package → image in order
     clean     Remove build artifacts
+              --sysroot  also wipe the sysroot (implies --output)
+              --all      wipe everything (build + sysroot + output)
 
 Run 'baker <command> --help' for command-specific options.
 """
@@ -184,6 +186,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Boot the disk image in QEMU for interactive testing",
     )
     sub_vm.add_argument(
+        "--fresh",
+        action="store_true",
+        dest="vm_fresh",
+        help="Clean sysroot and output, rebuild all components and image, then boot",
+    )
+    sub_vm.add_argument(
         "--build",
         action="store_true",
         dest="vm_build",
@@ -256,7 +264,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--sysroot",
         action="store_true",
         dest="clean_sysroot",
-        help="Also remove the sysroot directory",
+        help="Also remove the sysroot directory (implies --output, since the image is derived from the sysroot)",
     )
     sub_clean.add_argument(
         "--output",
@@ -383,6 +391,7 @@ def main(argv: list = None) -> int:
 
     elif command == "vm":
         VmStage.build_image_first = getattr(args, "vm_build", False)
+        VmStage.fresh_build = getattr(args, "vm_fresh", False)
         # --no-snapshot explicitly disables snapshot; otherwise None means "use config"
         VmStage.snapshot_override = False if getattr(args, "vm_no_snapshot", False) else None
         VmStage.ram_override = getattr(args, "vm_ram", None)
@@ -411,7 +420,9 @@ def main(argv: list = None) -> int:
             CleanStage.clean_output = True
         else:
             CleanStage.clean_sysroot = getattr(args, "clean_sysroot", False)
-            CleanStage.clean_output = getattr(args, "clean_output", False)
+            # Cleaning the sysroot invalidates any existing disk image, so
+            # always clean output alongside it.
+            CleanStage.clean_output = getattr(args, "clean_output", False) or CleanStage.clean_sysroot
         results = runner.run_stages(["clean"])
 
     else:

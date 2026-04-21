@@ -84,6 +84,14 @@ class TestCLIParsing:
         args = self._parse(["clean", "--all"])
         assert args.clean_all is True
 
+    def test_vm_fresh_flag(self):
+        args = self._parse(["vm", "--fresh"])
+        assert args.vm_fresh is True
+
+    def test_vm_fresh_default_false(self):
+        args = self._parse(["vm"])
+        assert args.vm_fresh is False
+
     def test_config_flag(self):
         args = self._parse(["--config", "custom.yaml", "build"])
         assert args.config == "custom.yaml"
@@ -147,5 +155,25 @@ class TestMainIntegration:
             "clean", "--sysroot",
         ])
 
+    def test_clean_sysroot_also_removes_output(self, tmp_path):
+        """--sysroot flag must imply --output (stale image is invalid after sysroot wipe)."""
+        cfg_file = tmp_path / "baker.yaml"
+        cfg_file.write_text(
+            f"sysroot: {tmp_path}/sysroot\n"
+            f"output_dir: {tmp_path}/output\n"
+            f"build_dir: {tmp_path}/build\n"
+        )
+
+        sysroot = tmp_path / "sysroot"
+        output = tmp_path / "output"
+        sysroot.mkdir()
+        output.mkdir()
+        (sysroot / "marker").write_text("x")
+        (output / "image.img").write_text("y")
+
+        rc = baker.main(["--config", str(cfg_file), "clean", "--sysroot"])
+
         assert rc == 0
-        assert not forced.exists()
+        assert not sysroot.exists(), "sysroot should have been removed"
+        assert not output.exists(), "output should have been removed (implied by --sysroot)"
+
