@@ -106,6 +106,12 @@ class TestGenerateMulSpecs:
         # linked against it.  Without this guard musl-gcc ignores -static.
         assert "%{!static:-dynamic-linker /lib/ld-musl-i386.so.1}" in specs
 
+    def test_static_flag_passed_to_linker(self):
+        specs = generate_musl_specs("/inc", "/lib")
+        # %{static:-static} must be present so -static is forwarded to ld;
+        # without it GCC's built-in *link: is replaced and --static is lost.
+        assert "%{static:-static}" in specs
+
     def test_renames_cpp_options(self):
         specs = generate_musl_specs("/inc", "/lib")
         assert "%rename cpp_options old_cpp_options" in specs

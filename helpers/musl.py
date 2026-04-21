@@ -77,7 +77,7 @@ def generate_musl_specs(include_dir: str, lib_dir: str) -> str:
         "*endfile:\n"
         f"{lib_dir}/crtn.o\n\n"
         "*link:\n"
-        "-m elf_i386 %{!static:-dynamic-linker /lib/ld-musl-i386.so.1}\n"
+        "-m elf_i386 %{static:-static} %{!static:-dynamic-linker /lib/ld-musl-i386.so.1}\n"
     )
 
 
