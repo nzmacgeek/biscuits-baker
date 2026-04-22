@@ -138,7 +138,7 @@ image:
 vm:
   ram_mb: 512           # RAM to give the VM
   cpus: 2               # virtual CPU count
-  display: none         # none (headless/serial) | gtk (graphical window)
+  display: gtk         # none (headless/serial) | gtk (graphical window)
   kvm: auto             # auto (use if /dev/kvm available) | enabled | disabled
   snapshot: true        # true = non-destructive (changes discarded on exit)
   extra_args: []        # additional qemu-system-i386 arguments

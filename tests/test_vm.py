@@ -267,7 +267,7 @@ class TestVmStageQemuCommand:
         cmd = stage._build_qemu_cmd(cfg, "/fake/disk.img", 512, 2, "none", True)
         assert "-netdev" in cmd
         assert "-device" in cmd
-        assert any("ne2k_pci" in a for a in cmd)
+        assert any("ne2k_isa" in a for a in cmd)
 
 
 # ---------------------------------------------------------------------------
