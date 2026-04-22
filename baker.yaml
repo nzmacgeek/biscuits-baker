@@ -48,7 +48,7 @@ kernel:
 # Network configuration used during prepare (fetching sources)
 network:
   kernel_repo: "https://github.com/nzmacgeek/biscuits"
-  kernel_branch: "main"
+  kernel_branch: "debug/login-tracing"
   musl_blueyos_repo: "https://github.com/nzmacgeek/musl-blueyos"
   musl_blueyos_branch: "main"
   glibc_blueyos_repo: "https://github.com/nzmacgeek/glibc-blueyos"
