@@ -140,5 +140,5 @@ vm:
   cpus: 2               # virtual CPU count
   display: gtk         # none (headless/serial) | gtk (graphical window)
   kvm: auto             # auto (use if /dev/kvm available) | enabled | disabled
-  snapshot: true        # true = non-destructive (changes discarded on exit)
+  snapshot: false       # false = persistent (disk writes survive; use for diagnostics)
   extra_args: []        # additional qemu-system-i386 arguments
