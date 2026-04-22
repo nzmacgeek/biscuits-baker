@@ -122,7 +122,7 @@ class VmStage(Stage):
             "-m", f"{ram_mb}M",
             "-smp", str(cpus),
             "-netdev", "user,id=usernet",
-            "-device", "ne2k_pci,netdev=usernet",
+            "-device", "ne2k_isa,netdev=usernet",
             "-no-reboot",
             "-no-shutdown",
         ]

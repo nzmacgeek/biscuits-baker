@@ -48,9 +48,52 @@ class BlueyosBaseRecipe(MuslPackageRecipe):
             cwd=src,
             env={"MUSL_PREFIX": musl_prefix},
         )
+        self._update_claw_manifest()
         self.log.info("Installed blueyos-base into %s", self.config.abs_sysroot)
 
+    def _update_claw_manifest(self) -> None:
+        """Register blueyos-base claw units in units.manifest (idempotent)."""
+        manifest_path = os.path.join(self.config.abs_sysroot, "etc", "claw", "units.manifest")
+        if not os.path.isfile(manifest_path):
+            return
+
+        desired_entries = [
+            "/etc/claw/services.d/bash-watch.service.yml",
+        ]
+
+        with open(manifest_path, "r", encoding="utf-8", errors="replace") as fh:
+            lines = [line.rstrip("\n") for line in fh]
+
+        changed = False
+        for entry in desired_entries:
+            if entry not in lines:
+                lines.append(entry)
+                changed = True
+
+        if changed:
+            with open(manifest_path, "w", encoding="utf-8") as fh:
+                fh.write("\n".join(lines) + "\n")
+            self.log.info("Updated claw units.manifest with blueyos-base entries")
+
     def package(self) -> str | None:
+        src = self._source_dir
+        musl_prefix = self._resolve_musl_make_prefix()
+        dpkbuild = self.resolve_dpkbuild()
+
+        env = {"MUSL_PREFIX": musl_prefix}
+        env["PATH"] = os.path.dirname(dpkbuild) + ":" + os.environ.get("PATH", "")
+
+        self.run(["make", "package"], cwd=src, env=env)
+        dpk_files = glob.glob(os.path.join(src, "*.dpk"))
+        if not dpk_files:
+            raise RecipeError(
+                f"make package completed for {self.name}, but no .dpk was produced in {src}"
+            )
+
+        dest = os.path.join(self.config.abs_output_dir, os.path.basename(dpk_files[0]))
+        shutil.copy2(dpk_files[0], dest)
+        self.log.info("Package: %s", dest)
+        return dest
         src = self._source_dir
         musl_prefix = self._resolve_musl_make_prefix()
         dpkbuild = self.resolve_dpkbuild()

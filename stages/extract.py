@@ -9,7 +9,7 @@ image and cannot be extracted this way.  They are only available from a live
 running system via the QEMU serial console.
 
 Usage:
-    baker extract                          # extract /var/log and /etc
+    baker extract                          # extract /var/log, /etc and /root
     baker extract --paths /var/log        # extract only /var/log
     baker extract --output debug/run-42   # custom output directory
     baker extract --image path/to/img     # use a specific disk image
@@ -27,7 +27,7 @@ from helpers.blueyfs import BlueyFSImage, extract_inode, safe_child_path, IFMT, 
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_PATHS = ["/var/log", "/etc"]
+DEFAULT_PATHS = ["/var/log", "/etc", "/root"]
 
 
 def _resolve_image_path(cfg, image_override: str | None) -> str:

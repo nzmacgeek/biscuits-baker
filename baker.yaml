@@ -48,7 +48,7 @@ kernel:
 # Network configuration used during prepare (fetching sources)
 network:
   kernel_repo: "https://github.com/nzmacgeek/biscuits"
-  kernel_branch: "main"
+  kernel_branch: "debug/login-tracing"
   musl_blueyos_repo: "https://github.com/nzmacgeek/musl-blueyos"
   musl_blueyos_branch: "main"
   glibc_blueyos_repo: "https://github.com/nzmacgeek/glibc-blueyos"
@@ -138,7 +138,7 @@ image:
 vm:
   ram_mb: 512           # RAM to give the VM
   cpus: 2               # virtual CPU count
-  display: none         # none (headless/serial) | gtk (graphical window)
+  display: gtk         # none (headless/serial) | gtk (graphical window)
   kvm: auto             # auto (use if /dev/kvm available) | enabled | disabled
-  snapshot: true        # true = non-destructive (changes discarded on exit)
+  snapshot: false       # false = persistent (disk writes survive; use for diagnostics)
   extra_args: []        # additional qemu-system-i386 arguments
