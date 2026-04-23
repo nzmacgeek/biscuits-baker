@@ -35,6 +35,7 @@ class ScoutRecipe(MuslPackageRecipe):
         "usr/bin/nslookup",
         "usr/bin/ping",
         "usr/bin/tracert",
+        "usr/bin/scoutctl",
         "etc/scout/scout.conf",
         "etc/claw/services.d/scout.service.yml",
     ]
