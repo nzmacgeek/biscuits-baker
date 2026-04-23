@@ -114,7 +114,12 @@ class PrepareStage(Stage):
             )
 
     def _pull_latest(self, repo_dir: str, branch: str, label: str) -> None:
-        """Fetch origin and fast-forward to the latest commit on *branch*."""
+        """Fetch origin and reset the working tree to the latest commit on *branch*.
+
+        Uses ``git checkout -B <branch> origin/<branch>`` so the checkout always
+        lands on the configured branch regardless of what is currently checked
+        out locally, and without requiring a fast-forward relationship.
+        """
         if shutil.which("git") is None:
             return
 
@@ -132,31 +137,11 @@ class PrepareStage(Stage):
             )
             return
 
-        # Compare local HEAD with origin/<branch>
-        def _rev(ref: str) -> str | None:
-            r = subprocess.run(
-                ["git", "rev-parse", ref],
-                cwd=repo_dir,
-                capture_output=True,
-                text=True,
-                env=build_host_env(),
-            )
-            return r.stdout.strip() if r.returncode == 0 else None
-
-        local = _rev("HEAD")
-        remote = _rev(f"origin/{branch}")
-
-        if not local or not remote:
-            self.log.warning("Could not compare local vs origin/%s for %s", branch, label)
-            return
-
-        if local == remote:
-            self.log.info("%s is already up to date on %s", label, branch)
-            return
-
-        self.log.info("%s has new commits on %s — pulling (fast-forward)", label, branch)
+        # Reset local branch to match origin/<branch> exactly.
+        # -B creates or resets the branch so we always end up on the right
+        # branch even when the local checkout was pointing elsewhere.
         result = subprocess.run(
-            ["git", "merge", "--ff-only", f"origin/{branch}"],
+            ["git", "checkout", "-B", branch, f"origin/{branch}"],
             cwd=repo_dir,
             capture_output=True,
             text=True,
@@ -164,10 +149,10 @@ class PrepareStage(Stage):
         )
         if result.returncode != 0:
             self.log.warning(
-                "Fast-forward merge failed for %s: %s", label, result.stderr.strip()
+                "Failed to checkout %s for %s: %s", branch, label, result.stderr.strip()
             )
         else:
-            self.log.info("%s updated to %s", label, remote[:12])
+            self.log.info("%s is now at origin/%s", label, branch)
 
     def _clone_or_pull(self, repo_url: str, base_dir: str) -> None:
         name = repo_url.rstrip("/").split("/")[-1].removesuffix(".git")
