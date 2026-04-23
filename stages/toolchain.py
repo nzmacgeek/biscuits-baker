@@ -65,7 +65,7 @@ class ToolchainStage(Stage):
                 )
                 os.makedirs(cfg.abs_toolchain_prefix, exist_ok=True)
                 generated = self._write_toolchain_script(cfg.abs_toolchain_prefix)
-                self._run_script(generated, cwd=src)
+                self._run_script(generated, cwd=cfg.abs_build_dir)
             self._ensure_blueyos_target_aliases(cfg.abs_toolchain_prefix)
         else:
             self.log.info(
