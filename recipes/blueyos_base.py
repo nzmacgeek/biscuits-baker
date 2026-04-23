@@ -48,32 +48,7 @@ class BlueyosBaseRecipe(MuslPackageRecipe):
             cwd=src,
             env={"MUSL_PREFIX": musl_prefix},
         )
-        self._update_claw_manifest()
         self.log.info("Installed blueyos-base into %s", self.config.abs_sysroot)
-
-    def _update_claw_manifest(self) -> None:
-        """Register blueyos-base claw units in units.manifest (idempotent)."""
-        manifest_path = os.path.join(self.config.abs_sysroot, "etc", "claw", "units.manifest")
-        if not os.path.isfile(manifest_path):
-            return
-
-        desired_entries = [
-            "/etc/claw/services.d/bash-watch.service.yml",
-        ]
-
-        with open(manifest_path, "r", encoding="utf-8", errors="replace") as fh:
-            lines = [line.rstrip("\n") for line in fh]
-
-        changed = False
-        for entry in desired_entries:
-            if entry not in lines:
-                lines.append(entry)
-                changed = True
-
-        if changed:
-            with open(manifest_path, "w", encoding="utf-8") as fh:
-                fh.write("\n".join(lines) + "\n")
-            self.log.info("Updated claw units.manifest with blueyos-base entries")
 
     def package(self) -> str | None:
         src = self._source_dir
