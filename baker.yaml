@@ -159,6 +159,10 @@ components:
   - name: busybox
     enabled: true
 
+  # DHCP client daemon (acquire IP via DHCP after walkies brings interface up)
+  - name: bluey-dhcp
+    enabled: true
+
 # Components to explicitly exclude from the build
 exclude: []
 

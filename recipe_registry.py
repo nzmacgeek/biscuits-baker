@@ -41,6 +41,7 @@ from recipes.mpfr import MpfrRecipe
 from recipes.mpc import MpcRecipe
 from recipes.gcc_native import GccNativeRecipe
 from recipes.busybox import BusyboxRecipe
+from recipes.dhcp_client import DhcpClientRecipe
 
 # ---------------------------------------------------------------------------
 # All known recipe classes
@@ -78,6 +79,7 @@ RECIPE_CLASSES: List[Type[BaseRecipe]] = [
     MpcRecipe,
     GccNativeRecipe,
     BusyboxRecipe,
+    DhcpClientRecipe,
 ]
 
 
