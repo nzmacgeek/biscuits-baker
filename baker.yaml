@@ -120,6 +120,16 @@ components:
     enabled: true
   - name: scout
     enabled: true
+  - name: openssl
+    enabled: true
+  - name: nano
+    enabled: true
+  - name: vim
+    enabled: true
+  - name: dropbear
+    enabled: true
+  - name: w3m
+    enabled: true
 
 # Components to explicitly exclude from the build
 exclude: []

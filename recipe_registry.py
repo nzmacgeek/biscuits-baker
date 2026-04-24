@@ -25,6 +25,11 @@ from recipes.blueyos_archiving_tools import BlueyosArchivingToolsRecipe
 from recipes.login_tools import LoginToolsRecipe
 from recipes.walkies import WalkiesRecipe
 from recipes.scout import ScoutRecipe
+from recipes.openssl import OpenSSLRecipe
+from recipes.nano import NanoRecipe
+from recipes.vim import VimRecipe
+from recipes.dropbear import DropbearRecipe
+from recipes.w3m import W3mRecipe
 
 # ---------------------------------------------------------------------------
 # All known recipe classes
@@ -46,6 +51,11 @@ RECIPE_CLASSES: List[Type[BaseRecipe]] = [
     LoginToolsRecipe,
     WalkiesRecipe,
     ScoutRecipe,
+    OpenSSLRecipe,
+    NanoRecipe,
+    VimRecipe,
+    DropbearRecipe,
+    W3mRecipe,
 ]
 
 
