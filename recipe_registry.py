@@ -30,6 +30,11 @@ from recipes.nano import NanoRecipe
 from recipes.vim import VimRecipe
 from recipes.dropbear import DropbearRecipe
 from recipes.w3m import W3mRecipe
+from recipes.musl_dev import MuslDevRecipe
+from recipes.kernel_headers import KernelHeadersRecipe
+from recipes.gnu_make import GnuMakeRecipe
+from recipes.tcc import TccRecipe
+from recipes.binutils import BinutilsRecipe
 
 # ---------------------------------------------------------------------------
 # All known recipe classes
@@ -56,6 +61,11 @@ RECIPE_CLASSES: List[Type[BaseRecipe]] = [
     VimRecipe,
     DropbearRecipe,
     W3mRecipe,
+    MuslDevRecipe,
+    KernelHeadersRecipe,
+    GnuMakeRecipe,
+    TccRecipe,
+    BinutilsRecipe,
 ]
 
 

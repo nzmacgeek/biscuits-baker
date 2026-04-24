@@ -131,6 +131,18 @@ components:
   - name: w3m
     enabled: true
 
+  # Self-hosting development toolchain
+  - name: musl-dev
+    enabled: true
+  - name: kernel-headers
+    enabled: true
+  - name: gnu-make
+    enabled: true
+  - name: tcc
+    enabled: true
+  - name: binutils
+    enabled: true
+
 # Components to explicitly exclude from the build
 exclude: []
 
