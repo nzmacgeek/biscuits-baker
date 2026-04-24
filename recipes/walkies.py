@@ -53,16 +53,19 @@ class WalkiesRecipe(MuslPackageRecipe):
 
     def install(self) -> None:
         src = self._source_dir
-        payload_roots = [
-            os.path.join(src, "pkg", "payload"),
-            os.path.join(src, "payload"),
-        ]
-        for payload_root in payload_roots:
+        installed_payload = False
+
+        # Install config/service files from the payload tree.
+        # Note: pkg/payload/sbin/ only contains a .gitkeep placeholder at build time;
+        # the walkies binary is not copied there until the dpk/package step.
+        for payload_root in [os.path.join(src, "pkg", "payload"), os.path.join(src, "payload")]:
             if os.path.isdir(payload_root):
                 self.sysroot.install_tree(payload_root, ".")
                 self.log.info("Installed walkies payload into %s", self.config.abs_sysroot)
-                return
+                installed_payload = True
+                break
 
+        # Install the binary separately — it lives in the build output directory.
         binary_candidates = [
             os.path.join(src, "build", "walkies"),
             os.path.join(src, "bin", "walkies"),
@@ -70,12 +73,14 @@ class WalkiesRecipe(MuslPackageRecipe):
         ]
         for path in binary_candidates:
             if os.path.isfile(path):
-                self.sysroot.install_binary(path, "usr/bin/walkies")
-                self._install_interfaces_config(src)
-                self.log.info("Installed walkies → sysroot/usr/bin/walkies")
+                self.sysroot.install_binary(path, "sbin/walkies")
+                if not installed_payload:
+                    self._install_interfaces_config(src)
+                self.log.info("Installed walkies → sysroot/sbin/walkies")
                 return
 
-        self.log.warning("walkies produced no installable payload or binary; skipping install.")
+        if not installed_payload:
+            self.log.warning("walkies produced no installable payload or binary; skipping install.")
 
     def package(self) -> str | None:
         src = self._source_dir
