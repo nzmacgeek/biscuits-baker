@@ -71,9 +71,56 @@ class TccRecipe(PortRecipe):
             cwd=src,
         )
 
+        # Clean any stale objects from a previous build attempt before
+        # rebuilding.  This ensures a consistent state regardless of whether
+        # baker was run before.
+        self.run(["make", "clean"], cwd=src)
+
         self.log.info("Building TCC %s", self.version)
         make_flags = self.config.kernel.make_flags.split()
-        self.run(["make"] + make_flags, cwd=src)
+        # Two extra make variables are required for a correct cross-build:
+        #
+        # i386-libtcc1-usegcc=yes
+        #   By default, lib/Makefile builds libtcc1.a by running the just-
+        #   built TCC binary.  Since that binary is i386 and we are on
+        #   x86_64, it cannot execute → libtcc1.a is never produced.  This
+        #   flag switches libtcc1.a compilation to use $(CC) (musl-gcc) and
+        #   ar instead, which works correctly in the cross-build environment.
+        #
+        # CONFIG_musl=yes
+        #   lib/Makefile includes bcheck.o by default.  bcheck.c uses
+        #   glibc-only malloc hooks (__malloc_hook etc.) that do not exist in
+        #   musl, causing compilation errors.  CONFIG_musl=yes sets BCHECK_O=
+        #   (empty), omitting bcheck.o from libtcc1.a.
+        self.run(
+            [
+                "make",
+                "i386-libtcc1-usegcc=yes",
+                "CONFIG_musl=yes",
+            ]
+            + make_flags,
+            cwd=src,
+        )
+
+        # Verify both artefacts were produced.
+        tcc_bin = os.path.join(src, "tcc")
+        libtcc1 = os.path.join(src, "lib", "libtcc1.a")
+        if not os.path.isfile(tcc_bin):
+            raise RecipeError("TCC binary not produced after make")
+        if not os.path.isfile(libtcc1):
+            raise RecipeError(
+                "lib/libtcc1.a not produced — TCC cannot link programs "
+                "without it.  Check that musl-gcc is in PATH and "
+                "i386-libtcc1-usegcc=yes took effect."
+            )
+
+        import subprocess as _sp
+        result = _sp.run(["file", tcc_bin], capture_output=True, text=True)
+        if "ELF 32-bit" not in result.stdout:
+            raise RecipeError(
+                f"TCC binary is not 32-bit ELF: {result.stdout.strip()}"
+            )
+        self.log.info("TCC binary OK: %s", result.stdout.strip())
 
     def install(self) -> None:
         src = self._source_dir
