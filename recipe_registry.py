@@ -35,6 +35,12 @@ from recipes.kernel_headers import KernelHeadersRecipe
 from recipes.gnu_make import GnuMakeRecipe
 from recipes.tcc import TccRecipe
 from recipes.binutils import BinutilsRecipe
+from recipes.zlib import ZlibRecipe
+from recipes.gmp import GmpRecipe
+from recipes.mpfr import MpfrRecipe
+from recipes.mpc import MpcRecipe
+from recipes.gcc_native import GccNativeRecipe
+from recipes.busybox import BusyboxRecipe
 
 # ---------------------------------------------------------------------------
 # All known recipe classes
@@ -66,6 +72,12 @@ RECIPE_CLASSES: List[Type[BaseRecipe]] = [
     GnuMakeRecipe,
     TccRecipe,
     BinutilsRecipe,
+    ZlibRecipe,
+    GmpRecipe,
+    MpfrRecipe,
+    MpcRecipe,
+    GccNativeRecipe,
+    BusyboxRecipe,
 ]
 
 

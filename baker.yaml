@@ -143,6 +143,22 @@ components:
   - name: binutils
     enabled: true
 
+  # GCC prerequisites and native compiler
+  - name: zlib
+    enabled: true
+  - name: gmp
+    enabled: true
+  - name: mpfr
+    enabled: true
+  - name: mpc
+    enabled: true
+  - name: gcc-native
+    enabled: true
+
+  # POSIX utilities for self-hosting (needed for ./configure scripts)
+  - name: busybox
+    enabled: true
+
 # Components to explicitly exclude from the build
 exclude: []
 
