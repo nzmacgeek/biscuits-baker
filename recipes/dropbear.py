@@ -23,6 +23,8 @@ from recipes._port_recipe import PortRecipe
 from recipes.base import RecipeError
 
 _VERSION = "2024.86"
+# The official site blocks direct downloads; use the GitHub mirror instead.
+_TAG = f"DROPBEAR_{_VERSION}"
 
 
 class DropbearRecipe(PortRecipe):
@@ -39,10 +41,11 @@ class DropbearRecipe(PortRecipe):
     pkg_depends = []
 
     tarball_url = (
-        f"https://matt.ucc.asn.au/dropbear/releases/dropbear-{_VERSION}.tar.bz2"
+        f"https://github.com/mkj/dropbear/archive/refs/tags/{_TAG}.tar.gz"
     )
-    tarball_name = f"dropbear-{_VERSION}.tar.bz2"
-    src_subdir = f"dropbear-{_VERSION}"
+    tarball_name = f"dropbear-{_VERSION}.tar.gz"
+    # GitHub names the extracted dir after the repo + tag (without leading 'v')
+    src_subdir = f"dropbear-{_TAG}"
 
     def build(self) -> None:
         src = self._source_dir

@@ -42,7 +42,8 @@ class VimRecipe(PortRecipe):
         sysroot = self.config.abs_sysroot
         env = {
             "CC": musl_gcc,
-            "CFLAGS": f"-O2 -I{sysroot}/usr/include",
+            # ncurses wide-char headers live in ncursesw/ subdirectory
+            "CFLAGS": f"-O2 -I{sysroot}/usr/include -I{sysroot}/usr/include/ncursesw",
             "LDFLAGS": f"-L{sysroot}/usr/lib -static",
             # Tell configure we are cross-compiling so it skips run-tests.
             "vim_cv_toupper_broken": "no",
@@ -76,12 +77,8 @@ class VimRecipe(PortRecipe):
                 "--disable-sysmouse",
                 "--disable-selinux",
                 "--disable-smack",
-                "--disable-multibyte",
-                "--disable-rightleft",
-                "--disable-arabic",
-                "--disable-farsi",
                 "--disable-darwin",
-                "--with-tlib=ncurses",
+                "--with-tlib=ncursesw",
             ],
             cwd=src,
             env=env,

@@ -39,8 +39,11 @@ class NanoRecipe(PortRecipe):
         sysroot = self.config.abs_sysroot
         env = {
             "CC": musl_gcc,
-            # ncurses.h lives in sysroot/usr/include; ncurses.a in sysroot/usr/lib
-            "CFLAGS": f"-O2 -I{sysroot}/usr/include",
+            # term.h and other curses headers land in ncursesw/ when built with
+            # wide-character support (the blueyos-bash ncurses build uses --enable-widec)
+            "CFLAGS": (
+                f"-O2 -I{sysroot}/usr/include -I{sysroot}/usr/include/ncursesw"
+            ),
             "LDFLAGS": f"-L{sysroot}/usr/lib -static",
         }
 

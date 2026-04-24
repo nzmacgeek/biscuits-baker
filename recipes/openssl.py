@@ -57,6 +57,8 @@ class OpenSSLRecipe(PortRecipe):
                 "no-tests",
                 "no-asm",       # avoid NASM dependency; pure-C fallback
                 "no-engine",
+                "no-threads",   # musl-gcc uses -nostdinc which hides stdatomic.h;
+                                # no-threads avoids the C11 atomic header requirement
                 "--prefix=/usr",
                 "--openssldir=/etc/ssl",
                 f"CC={musl_gcc}",

@@ -41,6 +41,18 @@ class MpcRecipe(PortRecipe):
         sysroot = self.config.abs_sysroot
         make_flags = self.config.kernel.make_flags.split()
 
+        # Remove libtool .la files from the sysroot before building.  GMP and
+        # MPFR install .la files whose dependency_libs embed absolute paths to
+        # the sysroot directory; when libtool reads them on a different machine
+        # (or from a DESTDIR install), it can't find /usr/lib/libgmp.la and
+        # fails.  Static archives (.a) are sufficient for our purely-static
+        # cross build.
+        for la in ("libgmp.la", "libmpfr.la"):
+            la_path = os.path.join(sysroot, "usr", "lib", la)
+            if os.path.exists(la_path):
+                os.remove(la_path)
+                self.log.info("Removed %s (libtool .la not needed for static build)", la)
+
         self.log.info("Configuring MPC %s for i686-linux-musl", self.version)
         self.run(
             [
@@ -49,8 +61,11 @@ class MpcRecipe(PortRecipe):
                 "--prefix=/usr",
                 "--enable-static",
                 "--disable-shared",
-                f"--with-gmp={sysroot}/usr",
-                f"--with-mpfr={sysroot}/usr",
+                # Use explicit lib/include dirs so libtool doesn't look for .la files
+                f"--with-gmp-lib={sysroot}/usr/lib",
+                f"--with-gmp-include={sysroot}/usr/include",
+                f"--with-mpfr-lib={sysroot}/usr/lib",
+                f"--with-mpfr-include={sysroot}/usr/include",
             ],
             cwd=src,
             env=env,

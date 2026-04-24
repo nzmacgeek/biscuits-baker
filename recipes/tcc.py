@@ -103,13 +103,15 @@ class TccRecipe(PortRecipe):
         )
 
         # Verify both artefacts were produced.
+        # Note: lib/Makefile creates the archive as ../libtcc1.a (one level up
+        # from lib/), so the file lands at the root of the TCC source tree.
         tcc_bin = os.path.join(src, "tcc")
-        libtcc1 = os.path.join(src, "lib", "libtcc1.a")
+        libtcc1 = os.path.join(src, "libtcc1.a")
         if not os.path.isfile(tcc_bin):
             raise RecipeError("TCC binary not produced after make")
         if not os.path.isfile(libtcc1):
             raise RecipeError(
-                "lib/libtcc1.a not produced — TCC cannot link programs "
+                "libtcc1.a not produced — TCC cannot link programs "
                 "without it.  Check that musl-gcc is in PATH and "
                 "i386-libtcc1-usegcc=yes took effect."
             )

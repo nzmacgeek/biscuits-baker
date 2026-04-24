@@ -26,7 +26,7 @@ class ZlibRecipe(PortRecipe):
     install_paths = ["usr/lib/libz.a", "usr/include/zlib.h"]
     pkg_depends = []
 
-    tarball_url = f"https://zlib.net/zlib-{_VERSION}.tar.gz"
+    tarball_url = f"https://www.zlib.net/fossils/zlib-{_VERSION}.tar.gz"
     tarball_name = f"zlib-{_VERSION}.tar.gz"
     src_subdir = f"zlib-{_VERSION}"
 

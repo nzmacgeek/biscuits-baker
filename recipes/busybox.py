@@ -157,9 +157,10 @@ class BusyboxRecipe(PortRecipe):
         musl_gcc = self._musl_gcc()
         make_flags = self.config.kernel.make_flags.split()
 
-        # Step 1: generate base defconfig for i386
+        # Step 1: generate base defconfig (no ARCH= — BusyBox uses host arch
+        # for kconfig; cross-compilation is handled via CC and EXTRA_CFLAGS)
         self.log.info("Generating BusyBox defconfig")
-        self.run(["make", "defconfig", "ARCH=i386"], cwd=src)
+        self.run(["make", "defconfig"], cwd=src)
 
         # Step 2: apply our config fragment on top of defconfig
         config_path = os.path.join(src, ".config")
@@ -169,15 +170,16 @@ class BusyboxRecipe(PortRecipe):
 
         # Step 3: olddefconfig resolves any conflicts introduced by the fragment
         self.log.info("Running olddefconfig to resolve conflicts")
-        self.run(["make", "olddefconfig", "ARCH=i386"], cwd=src)
+        self.run(["make", "olddefconfig"], cwd=src)
 
-        # Step 4: build with musl-gcc
+        # Step 4: build with musl-gcc targeting i386
+        # ARCH is not set — BusyBox doesn't use kernel-style ARCH; 32-bit code
+        # generation comes from CC (musl-gcc wraps -m32) and CONFIG_EXTRA_CFLAGS.
         self.log.info("Building BusyBox %s with musl-gcc", self.version)
         self.run(
             [
                 "make",
                 f"CC={musl_gcc}",
-                "ARCH=i386",
                 "CROSS_COMPILE=",   # disable prefix; we set CC directly
                 "HOSTCC=gcc",
                 "busybox",          # just the binary, not install target
@@ -199,7 +201,6 @@ class BusyboxRecipe(PortRecipe):
                 "make",
                 "install",
                 f"CONFIG_PREFIX={staging}",
-                "ARCH=i386",
                 "CROSS_COMPILE=",
             ],
             cwd=src,

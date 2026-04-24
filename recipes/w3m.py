@@ -32,12 +32,12 @@ class W3mRecipe(PortRecipe):
     install_paths = ["usr/bin/w3m", "usr/share/w3m", "usr/lib/w3m"]
     pkg_depends = []
 
-    # Use the GitHub maintained fork which has modern fixes
     tarball_url = (
         "https://github.com/tats/w3m/archive/refs/tags/v0.5.3+git20230121.tar.gz"
     )
     tarball_name = "w3m-0.5.3+git20230121.tar.gz"
-    src_subdir = "w3m-0.5.3+git20230121"
+    # GitHub replaces '+' with '-' in the extracted directory name
+    src_subdir = "w3m-0.5.3-git20230121"
 
     def build(self) -> None:
         src = self._source_dir
