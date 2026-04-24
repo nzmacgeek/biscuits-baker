@@ -48,7 +48,7 @@ kernel:
 # Network configuration used during prepare (fetching sources)
 network:
   kernel_repo: "https://github.com/nzmacgeek/biscuits"
-  kernel_branch: "debug/login-tracing"
+  kernel_branch: "main"
   musl_blueyos_repo: "https://github.com/nzmacgeek/musl-blueyos"
   musl_blueyos_branch: "main"
   glibc_blueyos_repo: "https://github.com/nzmacgeek/glibc-blueyos"
@@ -85,7 +85,7 @@ network:
       branch: "main"
     - name: scout
       url: "https://github.com/nzmacgeek/scout"
-      branch: "main"
+      branch: "master"
   extra_repos: []
 
 # Components to include in the build (order matters for display; deps are resolved automatically)
